@@ -8,8 +8,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Chart.js CDN -->
+    <!-- Chart.js & Zoom Plugin CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -85,29 +86,14 @@
                     <div>
                         <h2>Performa Relatif Saham terhadap IHSG</h2>
                         <p class="card-subtitle">Perbandingan kinerja saham yang telah direbase ke nilai awal 100 (Skala Persentase)</p>
+                        <p class="interaction-instruction">Klik & Seret untuk Geser | Scroll untuk Zoom | Klik 2x untuk Reset</p>
                     </div>
                     <div class="chart-legend-container" id="relative-legend"></div>
                 </div>
                 <div class="chart-container">
                     <canvas id="relativePerformanceChart"></canvas>
                 </div>
-                <!-- Interactive Controls for Chart 1 -->
-                <div class="chart-controls" id="chart1-controls">
-                    <div class="control-item">
-                        <span class="control-label">Zoom X:</span>
-                        <input type="range" id="chart1-zoom" class="slider-control" min="5" max="252" value="252">
-                        <span class="control-value" id="chart1-zoom-val">All</span>
-                    </div>
-                    <div class="control-item">
-                        <span class="control-label">Scroll X:</span>
-                        <input type="range" id="chart1-scroll" class="slider-control" min="0" max="0" value="0" disabled>
-                    </div>
-                    <div class="control-item">
-                        <span class="control-label">Scale Y:</span>
-                        <input type="range" id="chart1-scale-y" class="slider-control" min="50" max="150" value="100">
-                        <span class="control-value" id="chart1-scale-y-val">Auto</span>
-                    </div>
-                </div>
+
             </div>
         </main>
 
@@ -147,6 +133,7 @@
                         <div>
                             <h2>Analisis Tren Harga Saham <span class="selected-stock-ticker"></span></h2>
                             <p class="card-subtitle">Harga Penutupan Historis, Rata-rata Bergerak 20 Hari (MA20), dan 50 Hari (MA50)</p>
+                            <p class="interaction-instruction">Klik & Seret untuk Geser | Scroll untuk Zoom | Klik 2x untuk Reset</p>
                         </div>
                     </div>
                     <div class="chart-container">
@@ -160,6 +147,7 @@
                         <div>
                             <h2>Analisis Momentum Saham <span class="selected-stock-ticker"></span></h2>
                             <p class="card-subtitle">Stochastic Oscillator dengan garis %K (cepat) dan %D (lambat) beserta batas overbought/oversold</p>
+                            <p class="interaction-instruction">Klik & Seret untuk Geser | Scroll untuk Zoom | Klik 2x untuk Reset</p>
                         </div>
                     </div>
                     <div class="chart-container">
@@ -168,25 +156,7 @@
                 </div>
             </div>
 
-            <!-- Shared Interactive Controls for Detailed Charts -->
-            <div class="card detail-controls-panel">
-                <div class="chart-controls" id="detail-controls">
-                    <div class="control-item">
-                        <span class="control-label">Zoom X (Tren & Momentum):</span>
-                        <input type="range" id="detail-zoom" class="slider-control" min="5" max="252" value="252">
-                        <span class="control-value" id="detail-zoom-val">All</span>
-                    </div>
-                    <div class="control-item">
-                        <span class="control-label">Scroll X:</span>
-                        <input type="range" id="detail-scroll" class="slider-control" min="0" max="0" value="0" disabled>
-                    </div>
-                    <div class="control-item">
-                        <span class="control-label">Scale Y (Tren):</span>
-                        <input type="range" id="detail-scale-y" class="slider-control" min="50" max="150" value="100">
-                        <span class="control-value" id="detail-scale-y-val">Auto</span>
-                    </div>
-                </div>
-            </div>
+
         </section>
 
         <!-- Ringkasan Analisis -->

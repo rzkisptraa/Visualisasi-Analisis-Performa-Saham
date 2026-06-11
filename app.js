@@ -6,16 +6,11 @@ let relativeChart = null;
 let trendChart = null;
 let momentumChart = null;
 
-// Timeframe & Scale States
+// Timeframe state
 let currentTimeframe = 'daily';
 
-let chart1ZoomVal = 252;
-let chart1ScrollVal = 0;
-let chart1ScaleYVal = 100;
-
-let detailZoomVal = 252;
-let detailScrollVal = 0;
-let detailScaleYVal = 100;
+// Sync lock to prevent recursive updates between linked charts
+let isSyncing = false;
 
 // Ticker Names Map for display
 const TICKER_NAMES = {
@@ -117,91 +112,41 @@ async function initDashboard() {
                 e.target.classList.add('active');
                 currentTimeframe = e.target.dataset.tf;
                 
-                // When timeframe changes, reset bounds and scroll values
-                resetSlidersForTimeframe();
                 updateAllViews();
             });
         });
         
-        // Setup Slider bindings for Chart 1 (Relative Performance)
-        const c1Zoom = document.getElementById('chart1-zoom');
-        const c1Scroll = document.getElementById('chart1-scroll');
-        const c1ScaleY = document.getElementById('chart1-scale-y');
-        
-        c1Zoom.addEventListener('input', (e) => {
-            chart1ZoomVal = parseInt(e.target.value);
-            document.getElementById('chart1-zoom-val').textContent = chart1ZoomVal === parseInt(e.target.max) ? 'All' : chart1ZoomVal;
-            
-            const N = getResampledLength('IHSG');
-            const maxScroll = N - chart1ZoomVal;
-            c1Scroll.max = maxScroll;
-            if (chart1ScrollVal > maxScroll) {
-                chart1ScrollVal = maxScroll;
-                c1Scroll.value = chart1ScrollVal;
-            }
-            c1Scroll.disabled = maxScroll <= 0;
-            
-            updateRelativeChart();
-        });
-        
-        c1Scroll.addEventListener('input', (e) => {
-            chart1ScrollVal = parseInt(e.target.value);
-            updateRelativeChart();
-        });
-        
-        c1ScaleY.addEventListener('input', (e) => {
-            chart1ScaleYVal = parseInt(e.target.value);
-            document.getElementById('chart1-scale-y-val').textContent = chart1ScaleYVal === 100 ? 'Auto' : `${(200 - chart1ScaleYVal)}%`;
-            updateRelativeChart();
-        });
-        
-        // Setup Slider bindings for detailed charts (Chart 2 & 3 linked)
-        const dZoom = document.getElementById('detail-zoom');
-        const dScroll = document.getElementById('detail-scroll');
-        const dScaleY = document.getElementById('detail-scale-y');
-        
-        dZoom.addEventListener('input', (e) => {
-            detailZoomVal = parseInt(e.target.value);
-            document.getElementById('detail-zoom-val').textContent = detailZoomVal === parseInt(e.target.max) ? 'All' : detailZoomVal;
-            
-            const N = getResampledLength(stockSelect.value);
-            const maxScroll = N - detailZoomVal;
-            dScroll.max = maxScroll;
-            if (detailScrollVal > maxScroll) {
-                detailScrollVal = maxScroll;
-                dScroll.value = detailScrollVal;
-            }
-            dScroll.disabled = maxScroll <= 0;
-            
-            updateSelectedStockView(stockSelect.value);
-        });
-        
-        dScroll.addEventListener('input', (e) => {
-            detailScrollVal = parseInt(e.target.value);
-            updateSelectedStockView(stockSelect.value);
-        });
-        
-        dScaleY.addEventListener('input', (e) => {
-            detailScaleYVal = parseInt(e.target.value);
-            document.getElementById('detail-scale-y-val').textContent = detailScaleYVal === 100 ? 'Auto' : `${(200 - detailScaleYVal)}%`;
-            updateSelectedStockView(stockSelect.value);
-        });
-        
         // Setup initial view
-        resetSlidersForTimeframe();
         updateAllViews();
         
         // Add dropdown change listener
         stockSelect.addEventListener('change', (e) => {
-            // When stock changes, reset the detailed controls to show the most recent 252 points for this timeframe
-            const N = getResampledLength(e.target.value);
-            detailZoomVal = Math.min(252, N);
-            detailScrollVal = N - detailZoomVal;
-            detailScaleYVal = 100;
-            dScaleY.value = 100;
-            document.getElementById('detail-scale-y-val').textContent = 'Auto';
-            
             updateSelectedStockView(e.target.value);
+        });
+        
+        // Add double-click listeners on canvases for zoom reset
+        const relativeCanvas = document.getElementById('relativePerformanceChart');
+        const trendCanvas = document.getElementById('trendChart');
+        const momentumCanvas = document.getElementById('momentumChart');
+        
+        relativeCanvas.addEventListener('dblclick', () => {
+            handleChartReset(relativeChart);
+        });
+        
+        trendCanvas.addEventListener('dblclick', () => {
+            handleChartReset(trendChart);
+            if (momentumChart) {
+                syncXAxis(trendChart, momentumChart);
+            }
+            updateInsightsFromChart();
+        });
+        
+        momentumCanvas.addEventListener('dblclick', () => {
+            handleChartReset(trendChart);
+            if (momentumChart) {
+                syncXAxis(trendChart, momentumChart);
+            }
+            updateInsightsFromChart();
         });
         
     } catch (error) {
@@ -291,48 +236,6 @@ function updateAllViews() {
     updateSelectedStockView(currentStock);
 }
 
-// Reset Slider ranges and parameters for a new Timeframe
-function resetSlidersForTimeframe() {
-    const N1 = getResampledLength('IHSG');
-    chart1ZoomVal = Math.min(252, N1);
-    chart1ScrollVal = N1 - chart1ZoomVal; // Show the most recent period
-    chart1ScaleYVal = 100;
-    
-    const c1Zoom = document.getElementById('chart1-zoom');
-    const c1Scroll = document.getElementById('chart1-scroll');
-    const c1ScaleY = document.getElementById('chart1-scale-y');
-    
-    c1Zoom.max = N1;
-    c1Zoom.value = chart1ZoomVal;
-    c1Scroll.max = N1 - chart1ZoomVal;
-    c1Scroll.value = chart1ScrollVal;
-    c1Scroll.disabled = (N1 - chart1ZoomVal) <= 0;
-    c1ScaleY.value = 100;
-    
-    document.getElementById('chart1-zoom-val').textContent = chart1ZoomVal === N1 ? 'All' : chart1ZoomVal;
-    document.getElementById('chart1-scale-y-val').textContent = 'Auto';
-    
-    const currentStock = document.getElementById('stock-select').value;
-    const N2 = getResampledLength(currentStock);
-    detailZoomVal = Math.min(252, N2);
-    detailScrollVal = N2 - detailZoomVal; // Show the most recent period
-    detailScaleYVal = 100;
-    
-    const dZoom = document.getElementById('detail-zoom');
-    const dScroll = document.getElementById('detail-scroll');
-    const dScaleY = document.getElementById('detail-scale-y');
-    
-    dZoom.max = N2;
-    dZoom.value = detailZoomVal;
-    dScroll.max = N2 - detailZoomVal;
-    dScroll.value = detailScrollVal;
-    dScroll.disabled = (N2 - detailZoomVal) <= 0;
-    dScaleY.value = 100;
-    
-    document.getElementById('detail-zoom-val').textContent = detailZoomVal === N2 ? 'All' : detailZoomVal;
-    document.getElementById('detail-scale-y-val').textContent = 'Auto';
-}
-
 // Get the length of the resampled series for a ticker
 function getResampledLength(ticker) {
     if (!pricesData || !pricesData[ticker]) return 0;
@@ -389,51 +292,94 @@ function getMondayDate(dateStr) {
     return monday.toISOString().split('T')[0];
 }
 
-// Update Slider boundaries dynamically
-function updateSliderBounds(sliderPrefix, N, currentZoom, currentScroll) {
-    const zoomSlider = document.getElementById(sliderPrefix + '-zoom');
-    const scrollSlider = document.getElementById(sliderPrefix + '-scroll');
-    const zoomValDisplay = document.getElementById(sliderPrefix + '-zoom-val');
+// Helper to determine min and max values of visible data arrays for vertical scaling
+function autoScaleY(chart) {
+    if (!chart || !chart.scales || !chart.scales.x || !chart.scales.y) return;
+    if (chart.canvas.id === 'momentumChart') return; // Keep Momentum fixed 0-100
     
-    // Zoom boundary
-    zoomSlider.max = N;
-    zoomSlider.min = Math.min(5, N);
-    let zoom = Math.min(currentZoom, N);
-    zoomSlider.value = zoom;
-    zoomValDisplay.textContent = zoom === N ? 'All' : zoom;
+    const xScale = chart.scales.x;
+    const minIndex = Math.max(0, Math.floor(xScale.min));
+    const maxIndex = Math.min(chart.data.labels.length - 1, Math.ceil(xScale.max));
     
-    // Scroll boundary
-    const maxScroll = N - zoom;
-    scrollSlider.max = maxScroll;
-    scrollSlider.min = 0;
-    let scroll = Math.min(currentScroll, maxScroll);
-    scrollSlider.value = scroll;
+    let minVal = Infinity;
+    let maxVal = -Infinity;
     
-    if (maxScroll <= 0) {
-        scrollSlider.disabled = true;
-        scrollSlider.value = 0;
-        scroll = 0;
-    } else {
-        scrollSlider.disabled = false;
+    chart.data.datasets.forEach((dataset, index) => {
+        // Only scale based on visible datasets
+        if (chart.isDatasetVisible(index)) {
+            for (let i = minIndex; i <= maxIndex; i++) {
+                const val = dataset.data[i];
+                if (val !== null && val !== undefined && !isNaN(val)) {
+                    if (val < minVal) minVal = val;
+                    if (val > maxVal) maxVal = val;
+                }
+            }
+        }
+    });
+    
+    if (minVal !== Infinity && maxVal !== -Infinity) {
+        const range = maxVal - minVal;
+        const buffer = range * 0.05 || 1.0; // 5% buffer on top/bottom
+        chart.options.scales.y.min = minVal - buffer;
+        chart.options.scales.y.max = maxVal + buffer;
     }
-    
-    return { zoom, scroll };
 }
 
-// Helper to determine min and max values of visible data arrays for vertical scaling
-function getVisibleMinMax(dataArrays) {
-    let min = Infinity;
-    let max = -Infinity;
-    dataArrays.forEach(arr => {
-        arr.forEach(val => {
-            if (val !== null && !isNaN(val)) {
-                if (val < min) min = val;
-                if (val > max) max = val;
-            }
-        });
-    });
-    if (min === Infinity) return { min: 0, max: 100 };
-    return { min, max };
+// Sync X-axis zoom/pan between linked charts
+function syncXAxis(sourceChart, targetChart) {
+    if (!sourceChart || !targetChart || isSyncing) return;
+    isSyncing = true;
+    
+    const sourceMin = sourceChart.scales.x.min;
+    const sourceMax = sourceChart.scales.x.max;
+    
+    targetChart.options.scales.x.min = sourceMin;
+    targetChart.options.scales.x.max = sourceMax;
+    
+    targetChart.update('none');
+    isSyncing = false;
+}
+
+// Extract the visible data range from resampled stock data
+function getVisibleStockData(chart, resampledData) {
+    if (!chart || !chart.scales || !chart.scales.x) {
+        const N = resampledData.length;
+        let defaultZoom = N;
+        if (currentTimeframe === 'daily') defaultZoom = 252;
+        else if (currentTimeframe === 'weekly') defaultZoom = 104;
+        else if (currentTimeframe === 'monthly') defaultZoom = 36;
+        const minIndex = Math.max(0, N - defaultZoom);
+        return resampledData.slice(minIndex, N);
+    }
+    const minIndex = Math.max(0, Math.floor(chart.scales.x.min));
+    const maxIndex = Math.min(resampledData.length - 1, Math.ceil(chart.scales.x.max));
+    return resampledData.slice(minIndex, maxIndex + 1);
+}
+
+// Update insights box dynamically based on the current chart view range
+function updateInsightsFromChart() {
+    const ticker = document.getElementById('stock-select').value;
+    const stockData = pricesData[ticker];
+    if (!stockData) return;
+    const resampled = resampleDataset(stockData, currentTimeframe);
+    const visibleData = getVisibleStockData(trendChart, resampled);
+    generateInsights(ticker, visibleData);
+}
+
+// Handle double click reset interaction
+function handleChartReset(chart) {
+    if (!chart) return;
+    const N = chart.data.labels.length;
+    let defaultZoom = N;
+    if (currentTimeframe === 'daily') defaultZoom = 252;
+    else if (currentTimeframe === 'weekly') defaultZoom = 104;
+    else if (currentTimeframe === 'monthly') defaultZoom = 36;
+    
+    chart.options.scales.x.min = Math.max(0, N - defaultZoom);
+    chart.options.scales.x.max = N - 1;
+    
+    autoScaleY(chart);
+    chart.update('none');
 }
 
 // Chart 1: Performa Relatif
@@ -454,6 +400,37 @@ function renderRelativeChart() {
                 intersect: false
             },
             plugins: {
+                zoom: {
+                    limits: {
+                        x: {
+                            min: 0,
+                            max: 'original',
+                            minRange: 10
+                        }
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                        onPan: ({chart}) => {
+                            autoScaleY(chart);
+                            chart.update('none');
+                        }
+                    },
+                    zoom: {
+                        wheel: {
+                            enabled: true,
+                            speed: 0.1
+                        },
+                        pinch: {
+                            enabled: true
+                        },
+                        mode: 'x',
+                        onZoom: ({chart}) => {
+                            autoScaleY(chart);
+                            chart.update('none');
+                        }
+                    }
+                },
                 legend: {
                     display: true,
                     position: 'top',
@@ -505,25 +482,13 @@ function renderRelativeChart() {
 function updateRelativeChart() {
     if (!relativeChart || !pricesData) return;
     
-    // Determine bounds using IHSG length
     const rawIHSG = pricesData["IHSG"];
     const resampledIHSG = resampleDataset(rawIHSG, currentTimeframe);
-    const N = resampledIHSG.length;
+    const labels = resampledIHSG.map(item => item.date);
     
-    // Synchronize bounds
-    const bounds = updateSliderBounds('chart1', N, chart1ZoomVal, chart1ScrollVal);
-    chart1ZoomVal = bounds.zoom;
-    chart1ScrollVal = bounds.scroll;
-    
-    // Slice dates using the scroll indices
-    const slicedIHSG = resampledIHSG.slice(chart1ScrollVal, chart1ScrollVal + chart1ZoomVal);
-    const labels = slicedIHSG.map(item => item.date);
-    
-    // Assemble resampled & sliced datasets for each ticker
     const datasets = Object.keys(pricesData).map(ticker => {
         const resampled = resampleDataset(pricesData[ticker], currentTimeframe);
-        const sliced = resampled.slice(chart1ScrollVal, chart1ScrollVal + chart1ZoomVal);
-        const rebasedData = sliced.map(item => item.rebased);
+        const rebasedData = resampled.map(item => item.rebased);
         return {
             label: ticker === 'IHSG' ? 'IHSG (Benchmark)' : ticker,
             data: rebasedData,
@@ -537,32 +502,29 @@ function updateRelativeChart() {
         };
     });
     
-    // Sort datasets so IHSG is rendered on top
     datasets.sort((a, b) => (a.label.includes('IHSG') ? 1 : -1));
-    
-    // Manual scale Y override
-    let yMin = undefined;
-    let yMax = undefined;
-    if (chart1ScaleYVal !== 100) {
-        const visibleVals = datasets.map(d => d.data).flat();
-        const mm = getVisibleMinMax([visibleVals]);
-        const center = (mm.min + mm.max) / 2;
-        // Adjust bounds: if scaleYVal < 100 (zoom in), range is compressed. if > 100 (zoom out), range expanded.
-        const range = ((mm.max - mm.min) / 2) * (chart1ScaleYVal / 100) * 1.05;
-        yMin = center - range;
-        yMax = center + range;
-    }
     
     relativeChart.data.labels = labels;
     relativeChart.data.datasets = datasets;
-    relativeChart.options.scales.y.min = yMin;
-    relativeChart.options.scales.y.max = yMax;
-    relativeChart.update();
+    
+    const N = labels.length;
+    let defaultZoom = N;
+    if (currentTimeframe === 'daily') defaultZoom = 252;
+    else if (currentTimeframe === 'weekly') defaultZoom = 104;
+    else if (currentTimeframe === 'monthly') defaultZoom = 36;
+    
+    const minIndex = Math.max(0, N - defaultZoom);
+    const maxIndex = N - 1;
+    
+    relativeChart.options.scales.x.min = minIndex;
+    relativeChart.options.scales.x.max = maxIndex;
+    
+    autoScaleY(relativeChart);
+    relativeChart.update('none');
 }
 
 // Update Detail View (Chart 2, Chart 3, and Insights)
 function updateSelectedStockView(ticker) {
-    // Update display text
     document.querySelectorAll('.selected-stock-ticker').forEach(el => {
         el.textContent = ticker;
     });
@@ -573,33 +535,40 @@ function updateSelectedStockView(ticker) {
     const stockData = pricesData[ticker];
     if (!stockData) return;
     
-    // Resample stock daily data
     const resampled = resampleDataset(stockData, currentTimeframe);
-    const N = resampled.length;
+    const labels = resampled.map(item => item.date);
+    const closePrices = resampled.map(item => item.close);
+    const ma20 = resampled.map(item => item.ma20);
+    const ma50 = resampled.map(item => item.ma50);
+    const k = resampled.map(item => item.k);
+    const d = resampled.map(item => item.d);
     
-    // Synchronize bounds for the detailed sliders
-    const bounds = updateSliderBounds('detail', N, detailZoomVal, detailScrollVal);
-    detailZoomVal = bounds.zoom;
-    detailScrollVal = bounds.scroll;
-    
-    // Slice data
-    const sliced = resampled.slice(detailScrollVal, detailScrollVal + detailZoomVal);
-    
-    const labels = sliced.map(item => item.date);
-    const closePrices = sliced.map(item => item.close);
-    const ma20 = sliced.map(item => item.ma20);
-    const ma50 = sliced.map(item => item.ma50);
-    const k = sliced.map(item => item.k);
-    const d = sliced.map(item => item.d);
-    
-    // 1. Render/Update Chart 2 (Trend)
     updateTrendChart(labels, closePrices, ma20, ma50, ticker);
-    
-    // 2. Render/Update Chart 3 (Momentum)
     updateMomentumChart(labels, k, d);
     
-    // 3. Generate Automatic Insights (Analyze only the visible range)
-    generateInsights(ticker, sliced);
+    const N = labels.length;
+    let defaultZoom = N;
+    if (currentTimeframe === 'daily') defaultZoom = 252;
+    else if (currentTimeframe === 'weekly') defaultZoom = 104;
+    else if (currentTimeframe === 'monthly') defaultZoom = 36;
+    
+    const minIndex = Math.max(0, N - defaultZoom);
+    const maxIndex = N - 1;
+    
+    if (trendChart) {
+        trendChart.options.scales.x.min = minIndex;
+        trendChart.options.scales.x.max = maxIndex;
+        autoScaleY(trendChart);
+        trendChart.update('none');
+    }
+    if (momentumChart) {
+        momentumChart.options.scales.x.min = minIndex;
+        momentumChart.options.scales.x.max = maxIndex;
+        momentumChart.update('none');
+    }
+    
+    const visibleData = getVisibleStockData(trendChart, resampled);
+    generateInsights(ticker, visibleData);
 }
 
 // Chart 2: Trend Chart
@@ -621,7 +590,7 @@ function updateTrendChart(labels, closePrices, ma20, ma50, ticker) {
         {
             label: 'MA20',
             data: ma20,
-            borderColor: '#F59E0B', // Amber
+            borderColor: '#F59E0B',
             borderWidth: 1.5,
             pointRadius: 0,
             fill: false,
@@ -631,7 +600,7 @@ function updateTrendChart(labels, closePrices, ma20, ma50, ticker) {
         {
             label: 'MA50',
             data: ma50,
-            borderColor: '#A855F7', // Purple
+            borderColor: '#A855F7',
             borderWidth: 1.5,
             pointRadius: 0,
             fill: false,
@@ -639,24 +608,10 @@ function updateTrendChart(labels, closePrices, ma20, ma50, ticker) {
         }
     ];
     
-    // Manual scale Y override for Trend Chart
-    let yMin = undefined;
-    let yMax = undefined;
-    if (detailScaleYVal !== 100) {
-        const visibleVals = [...closePrices, ...ma20, ...ma50];
-        const mm = getVisibleMinMax([visibleVals]);
-        const center = (mm.min + mm.max) / 2;
-        const range = ((mm.max - mm.min) / 2) * (detailScaleYVal / 100) * 1.05;
-        yMin = center - range;
-        yMax = center + range;
-    }
-    
     if (trendChart) {
         trendChart.data.labels = labels;
         trendChart.data.datasets = datasets;
-        trendChart.options.scales.y.min = yMin;
-        trendChart.options.scales.y.max = yMax;
-        trendChart.update();
+        trendChart.update('none');
     } else {
         trendChart = new Chart(ctx, {
             type: 'line',
@@ -672,6 +627,41 @@ function updateTrendChart(labels, closePrices, ma20, ma50, ticker) {
                     intersect: false
                 },
                 plugins: {
+                    zoom: {
+                        limits: {
+                            x: {
+                                min: 0,
+                                max: 'original',
+                                minRange: 10
+                            }
+                        },
+                        pan: {
+                            enabled: true,
+                            mode: 'x',
+                            onPan: ({chart}) => {
+                                syncXAxis(chart, momentumChart);
+                                autoScaleY(chart);
+                                chart.update('none');
+                                updateInsightsFromChart();
+                            }
+                        },
+                        zoom: {
+                            wheel: {
+                                enabled: true,
+                                speed: 0.1
+                            },
+                            pinch: {
+                                enabled: true
+                            },
+                            mode: 'x',
+                            onZoom: ({chart}) => {
+                                syncXAxis(chart, momentumChart);
+                                autoScaleY(chart);
+                                chart.update('none');
+                                updateInsightsFromChart();
+                            }
+                        }
+                    },
                     legend: {
                         display: true,
                         labels: {
@@ -723,7 +713,7 @@ function updateMomentumChart(labels, k, d) {
         {
             label: '%K (Cepat)',
             data: k,
-            borderColor: '#06B6D4', // Cyan
+            borderColor: '#06B6D4',
             borderWidth: 1.8,
             pointRadius: 0,
             tension: 0.15
@@ -731,7 +721,7 @@ function updateMomentumChart(labels, k, d) {
         {
             label: '%D (Lambat)',
             data: d,
-            borderColor: '#EC4899', // Pink
+            borderColor: '#EC4899',
             borderWidth: 1.8,
             pointRadius: 0,
             tension: 0.15
@@ -741,7 +731,7 @@ function updateMomentumChart(labels, k, d) {
     if (momentumChart) {
         momentumChart.data.labels = labels;
         momentumChart.data.datasets = datasets;
-        momentumChart.update();
+        momentumChart.update('none');
     } else {
         momentumChart = new Chart(ctx, {
             type: 'line',
@@ -757,6 +747,41 @@ function updateMomentumChart(labels, k, d) {
                     intersect: false
                 },
                 plugins: {
+                    zoom: {
+                        limits: {
+                            x: {
+                                min: 0,
+                                max: 'original',
+                                minRange: 10
+                            }
+                        },
+                        pan: {
+                            enabled: true,
+                            mode: 'x',
+                            onPan: ({chart}) => {
+                                syncXAxis(chart, trendChart);
+                                autoScaleY(trendChart);
+                                chart.update('none');
+                                updateInsightsFromChart();
+                            }
+                        },
+                        zoom: {
+                            wheel: {
+                                enabled: true,
+                                speed: 0.1
+                            },
+                            pinch: {
+                                enabled: true
+                            },
+                            mode: 'x',
+                            onZoom: ({chart}) => {
+                                syncXAxis(chart, trendChart);
+                                autoScaleY(trendChart);
+                                chart.update('none');
+                                updateInsightsFromChart();
+                            }
+                        }
+                    },
                     legend: {
                         display: true,
                         labels: {
@@ -812,7 +837,14 @@ function generateInsights(ticker, stockData) {
     
     // Calculate returns
     const stockReturn = ((close - first.close) / first.close * 100).toFixed(1);
-    const ihsgReturn = metaData.returns["IHSG"].toFixed(1);
+    
+    // Calculate IHSG return in same period
+    const rawIHSG = pricesData["IHSG"];
+    const resampledIHSG = resampleDataset(rawIHSG, currentTimeframe);
+    // Find matching date in IHSG
+    const matchingFirstIHSG = resampledIHSG.find(item => item.date === first.date) || resampledIHSG[0];
+    const matchingLatestIHSG = resampledIHSG.find(item => item.date === latest.date) || resampledIHSG[resampledIHSG.length - 1];
+    const ihsgReturn = ((matchingLatestIHSG.close - matchingFirstIHSG.close) / matchingFirstIHSG.close * 100).toFixed(1);
     
     // 1. Determine Trend Badge & Text
     let trendBadge = "Neutral";
@@ -837,20 +869,18 @@ function generateInsights(ticker, stockData) {
         shortTermTrend = `Di jangka pendek, harga tertekan di bawah MA20 (Rp ${ma20.toLocaleString('id-ID')}), menunjukkan adanya pelemahan tren jangka pendek.`;
     }
     
-    // Check for Golden Cross/Death Cross crossover in the last 5 days of this window
+    // Check for Golden Cross/Death Cross crossover in the last 5 periods of this window
     let crossoverInsight = "";
     let crossoverDetected = false;
     for (let i = stockData.length - 1; i >= Math.max(1, stockData.length - 5); i--) {
         const curr = stockData[i];
         const previous = stockData[i - 1];
         
-        // Golden Cross (K crossing above D at low level)
         if (previous.k <= previous.d && curr.k > curr.d && curr.k < 35) {
             crossoverInsight = `Telah terjadi sinyal momentum <strong>Golden Cross</strong> (garis %K memotong ke atas garis %D) di area oversold pada tanggal ${curr.date}, mengindikasikan potensi titik balik pembalikan arah naik (rebound).`;
             crossoverDetected = true;
             break;
         }
-        // Death Cross (K crossing below D at high level)
         if (previous.k >= previous.d && curr.k < curr.d && curr.k > 65) {
             crossoverInsight = `Telah terjadi sinyal momentum <strong>Death Cross</strong> (garis %K memotong ke bawah garis %D) di area overbought pada tanggal ${curr.date}, mengindikasikan potensi pembalikan arah turun (koreksi).`;
             crossoverDetected = true;
