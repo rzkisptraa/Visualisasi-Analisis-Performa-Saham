@@ -267,7 +267,7 @@ function resampleDataset(data, timeframe) {
     if (resampled.length > 0) {
         const firstClose = resampled[0].close;
         resampled.forEach(item => {
-            item.rebased = firstClose !== 0 ? (item.close / firstClose) * 100 : 100;
+            item.rebased = firstClose !== 0 ? ((item.close - firstClose) / firstClose) * 100 : 0;
         });
     }
     
@@ -511,7 +511,11 @@ function renderRelativeChart() {
                         label: function(context) {
                             let label = context.dataset.label || '';
                             if (label) label += ': ';
-                            if (context.parsed.y !== null) label += context.parsed.y.toFixed(2) + '%';
+                            if (context.parsed.y !== null) {
+                                const val = context.parsed.y;
+                                const sign = val > 0 ? '+' : '';
+                                label += sign + val.toFixed(2) + '%';
+                            }
                             return label;
                         }
                     }
@@ -552,7 +556,7 @@ function updateRelativeChart() {
         
         const rebasedData = resampled.map(item => {
             if (firstClose !== null && item.active !== false) {
-                return firstClose !== 0 ? (item.close / firstClose) * 100 : 100;
+                return firstClose !== 0 ? ((item.close - firstClose) / firstClose) * 100 : 0;
             } else {
                 return null;
             }
