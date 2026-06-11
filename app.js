@@ -542,8 +542,8 @@ function updateTrendChart(labels, closePrices, ma20, ma50, ticker) {
         {
             label: 'Harga Penutupan',
             data: closePrices,
-            borderColor: colorTheme,
-            borderWidth: 2.5,
+            borderColor: '#FFFFFF',
+            borderWidth: 2,
             pointRadius: 0,
             pointHoverRadius: 4,
             fill: false,
@@ -552,17 +552,17 @@ function updateTrendChart(labels, closePrices, ma20, ma50, ticker) {
         {
             label: 'MA20',
             data: ma20,
-            borderColor: '#F59E0B',
+            borderColor: '#FF5555',
             borderWidth: 1.5,
             pointRadius: 0,
             fill: false,
-            borderDash: [2, 2],
+            borderDash: [4, 3],
             tension: 0.1
         },
         {
             label: 'MA50',
             data: ma50,
-            borderColor: '#A855F7',
+            borderColor: '#12C286',
             borderWidth: 1.5,
             pointRadius: 0,
             fill: false,
