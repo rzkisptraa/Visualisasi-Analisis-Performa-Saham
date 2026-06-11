@@ -55,6 +55,20 @@ async function initDashboard() {
         pricesData = await pricesRes.json();
         metaData = await metaRes.json();
         
+        // Pre-calculate rebased return for each stock relative to its first active day (IPO date)
+        Object.keys(pricesData).forEach(ticker => {
+            const data = pricesData[ticker];
+            const firstActiveItem = data.find(item => item.active !== false);
+            const firstClose = firstActiveItem ? firstActiveItem.close : null;
+            data.forEach(item => {
+                if (firstClose !== null && item.active !== false) {
+                    item.rebased = firstClose !== 0 ? ((item.close - firstClose) / firstClose) * 100 : 0;
+                } else {
+                    item.rebased = null;
+                }
+            });
+        });
+        
         // Setup metadata & KPI counters
         setupMetadata();
         setupKPIs();
@@ -262,15 +276,6 @@ function resampleDataset(data, timeframe) {
             warna_volume: warnaVolume
         });
     });
-    
-    // Recalculate rebased percentage prices relative to the first day of resampled timeframe
-    if (resampled.length > 0) {
-        const firstClose = resampled[0].close;
-        resampled.forEach(item => {
-            item.rebased = firstClose !== 0 ? ((item.close - firstClose) / firstClose) * 100 : 0;
-        });
-    }
-    
     return resampled;
 }
 
@@ -567,18 +572,7 @@ function updateRelativeChart() {
     const datasets = Object.keys(pricesData).map(ticker => {
         const resampled = resampleDataset(pricesData[ticker], relativeTimeframe);
         
-        // Rebase relative to the first active day
-        const firstActiveItem = resampled.find(item => item.active !== false);
-        const firstClose = firstActiveItem ? firstActiveItem.close : null;
-        
-        const rebasedData = resampled.map(item => {
-            if (firstClose !== null && item.active !== false) {
-                return firstClose !== 0 ? ((item.close - firstClose) / firstClose) * 100 : 0;
-            } else {
-                return null;
-            }
-        });
-        
+        const rebasedData = resampled.map(item => item.rebased);
         const pricesList = resampled.map(item => item.active !== false ? item.close : null);
         
         return {
