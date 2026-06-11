@@ -515,6 +515,21 @@ function renderRelativeChart() {
                                 const val = context.parsed.y;
                                 const sign = val > 0 ? '+' : '';
                                 label += sign + val.toFixed(2) + '%';
+                                
+                                // Add actual price validation to tooltip
+                                const rawData = context.raw;
+                                if (rawData && rawData.price !== undefined) {
+                                    const ticker = context.dataset.label;
+                                    const formattedPrice = rawData.price.toLocaleString('id-ID', {
+                                        minimumFractionDigits: 0,
+                                        maximumFractionDigits: 2
+                                    });
+                                    if (ticker.includes('IHSG')) {
+                                        label += ` (${formattedPrice})`;
+                                    } else {
+                                        label += ` (Rp ${formattedPrice})`;
+                                    }
+                                }
                             }
                             return label;
                         }
@@ -556,7 +571,11 @@ function updateRelativeChart() {
         
         const rebasedData = resampled.map(item => {
             if (firstClose !== null && item.active !== false) {
-                return firstClose !== 0 ? ((item.close - firstClose) / firstClose) * 100 : 0;
+                const percentage = firstClose !== 0 ? ((item.close - firstClose) / firstClose) * 100 : 0;
+                return {
+                    y: percentage,
+                    price: item.close
+                };
             } else {
                 return null;
             }
