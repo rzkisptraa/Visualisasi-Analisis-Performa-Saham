@@ -517,10 +517,12 @@ function renderRelativeChart() {
                                 label += sign + val.toFixed(2) + '%';
                                 
                                 // Add actual price validation to tooltip
-                                const rawData = context.raw;
-                                if (rawData && rawData.price !== undefined) {
+                                const dataIndex = context.dataIndex;
+                                const prices = context.dataset.prices;
+                                if (prices && prices[dataIndex] !== null && prices[dataIndex] !== undefined) {
+                                    const actualPrice = prices[dataIndex];
                                     const ticker = context.dataset.label;
-                                    const formattedPrice = rawData.price.toLocaleString('id-ID', {
+                                    const formattedPrice = actualPrice.toLocaleString('id-ID', {
                                         minimumFractionDigits: 0,
                                         maximumFractionDigits: 2
                                     });
@@ -571,19 +573,18 @@ function updateRelativeChart() {
         
         const rebasedData = resampled.map(item => {
             if (firstClose !== null && item.active !== false) {
-                const percentage = firstClose !== 0 ? ((item.close - firstClose) / firstClose) * 100 : 0;
-                return {
-                    y: percentage,
-                    price: item.close
-                };
+                return firstClose !== 0 ? ((item.close - firstClose) / firstClose) * 100 : 0;
             } else {
                 return null;
             }
         });
         
+        const pricesList = resampled.map(item => item.active !== false ? item.close : null);
+        
         return {
             label: ticker === 'IHSG' ? 'IHSG (Benchmark)' : ticker,
             data: rebasedData,
+            prices: pricesList,
             borderColor: ASSET_COLORS[ticker] || '#FFF',
             borderWidth: ticker === 'IHSG' ? 3 : 1.8,
             pointRadius: 0,
