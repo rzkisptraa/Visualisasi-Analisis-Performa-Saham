@@ -566,7 +566,8 @@ body {
 .custom-cursor {
     width: 16px;
     height: 16px;
-    background-color: rgba(255, 255, 255, 0.45); /* White and slightly transparent */
+    background-color: transparent; /* Hollow center */
+    border: 2px solid rgba(255, 255, 255, 0.6); /* Translucent white border */
     border-radius: 50%;
     position: fixed;
     top: 0;
@@ -574,13 +575,12 @@ body {
     pointer-events: none; /* Crucial: ensures clicks pass through to actual buttons */
     z-index: 999999;
     opacity: 0;
-    transition: opacity 0.2s ease-out, background-color 0.15s, border 0.15s;
-    border: 1px solid transparent;
+    transition: opacity 0.2s ease-out, background-color 0.15s, border-color 0.15s, border-width 0.15s;
 }
 
 .custom-cursor.hovered {
-    background-color: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.85);
+    background-color: rgba(255, 255, 255, 0.1); /* Subtle transparent fill on hover */
+    border: 1.2px solid rgba(255, 255, 255, 0.95);
 }
 
 /* Hide default cursor on desktop screens */
