@@ -1,0 +1,22 @@
+{
+  "last_update": "2026-06-11 17:51:23",
+  "status_pasar": "Bearish",
+  "ihsg_current": 5902.3759765625,
+  "returns": {
+    "IHSG": -17.346297294336786,
+    "BBCA": -37.51240711807299,
+    "BBRI": -24.784692509686543,
+    "BMRI": -14.36630379699374,
+    "TLKM": 7.493780220414475,
+    "BREN": -35.07692307692308,
+    "AMMN": -52.028985507246375
+  },
+  "top_outperformer": {
+    "ticker": "TLKM",
+    "return": 7.493780220414475
+  },
+  "top_underperformer": {
+    "ticker": "AMMN",
+    "return": -52.028985507246375
+  }
+}

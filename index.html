@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisis Performa Saham Indonesia terhadap IHSG</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <span class="badge badge-primary">Analisis Pasar Saham</span>
+                <h1 id="main-title">Analisis Performa Saham Indonesia terhadap IHSG</h1>
+                <p class="subtitle" id="sub-title">Visualisasi Relative Performance, Tren, dan Momentum Menggunakan MA20, MA50, dan Stochastic Oscillator</p>
+            </div>
+            <div class="header-meta">
+                <span class="meta-label">Pembaruan Terakhir:</span>
+                <span class="meta-value" id="last-update-time">Memuat...</span>
+            </div>
+        </header>
+
+        <!-- KPI Grid -->
+        <section class="kpi-grid" aria-label="KPI Dashboard">
+            <!-- KPI 1: IHSG -->
+            <div class="card kpi-card" id="kpi-ihsg-card">
+                <div class="kpi-header">
+                    <span class="kpi-title">IHSG Saat Ini</span>
+                    <div class="kpi-icon-container">
+                        <svg class="kpi-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                    </div>
+                </div>
+                <div class="kpi-value" id="kpi-ihsg-val">0</div>
+                <div class="kpi-footer">Indeks Acuan Indonesia</div>
+            </div>
+
+            <!-- KPI 2: Status Pasar -->
+            <div class="card kpi-card" id="kpi-status-card">
+                <div class="kpi-header">
+                    <span class="kpi-title">Status Pasar</span>
+                    <div class="kpi-icon-container">
+                        <svg class="kpi-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                    </div>
+                </div>
+                <div class="kpi-value" id="kpi-status-val">-</div>
+                <div class="kpi-footer" id="kpi-status-desc">Memuat...</div>
+            </div>
+
+            <!-- KPI 3: Top Outperformer -->
+            <div class="card kpi-card" id="kpi-outperformer-card">
+                <div class="kpi-header">
+                    <span class="kpi-title">Top Outperformer</span>
+                    <div class="kpi-icon-container text-success">
+                        <svg class="kpi-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path></svg>
+                    </div>
+                </div>
+                <div class="kpi-value text-success" id="kpi-outperformer-val">-</div>
+                <div class="kpi-footer">Performa Terbaik vs IHSG</div>
+            </div>
+
+            <!-- KPI 4: Top Underperformer -->
+            <div class="card kpi-card" id="kpi-underperformer-card">
+                <div class="kpi-header">
+                    <span class="kpi-title">Top Underperformer</span>
+                    <div class="kpi-icon-container text-danger">
+                        <svg class="kpi-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    </div>
+                </div>
+                <div class="kpi-value text-danger" id="kpi-underperformer-val">-</div>
+                <div class="kpi-footer">Performa Terendah vs IHSG</div>
+            </div>
+        </section>
+
+        <!-- Chart 1: Relative Performance -->
+        <main class="chart-section main-chart-section">
+            <div class="card chart-card">
+                <div class="card-header">
+                    <div>
+                        <h2>Performa Relatif Saham terhadap IHSG</h2>
+                        <p class="card-subtitle">Perbandingan kinerja saham yang telah direbase ke nilai awal 100 (Skala Persentase)</p>
+                    </div>
+                    <div class="chart-legend-container" id="relative-legend"></div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="relativePerformanceChart"></canvas>
+                </div>
+            </div>
+        </main>
+
+        <!-- Dropdown & Selected Stock Analytics -->
+        <section class="analytics-section">
+            <!-- Filter -->
+            <div class="filter-bar card">
+                <label for="stock-select" class="filter-label">Pilih Saham untuk Analisis Detail:</label>
+                <div class="select-wrapper">
+                    <select id="stock-select" class="styled-select">
+                        <option value="BBCA">BBCA (PT Bank Central Asia Tbk)</option>
+                        <option value="BBRI">BBRI (PT Bank Rakyat Indonesia Tbk)</option>
+                        <option value="BMRI">BMRI (PT Bank Mandiri Tbk)</option>
+                        <option value="TLKM">TLKM (PT Telkom Indonesia Tbk)</option>
+                        <option value="BREN">BREN (PT Barito Renewables Energy Tbk)</option>
+                        <option value="AMMN">AMMN (PT Amman Mineral Internasional Tbk)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Detail Charts Grid -->
+            <div class="charts-grid">
+                <!-- Chart 2: Trend Analysis -->
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <div>
+                            <h2>Analisis Tren Harga Saham <span class="selected-stock-ticker"></span></h2>
+                            <p class="card-subtitle">Harga Penutupan Historis, Rata-rata Bergerak 20 Hari (MA20), dan 50 Hari (MA50)</p>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 3: Momentum Analysis -->
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <div>
+                            <h2>Analisis Momentum Saham <span class="selected-stock-ticker"></span></h2>
+                            <p class="card-subtitle">Stochastic Oscillator dengan garis %K (cepat) dan %D (lambat) beserta batas overbought/oversold</p>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="momentumChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Ringkasan Analisis -->
+        <section class="insights-section">
+            <div class="card insights-card">
+                <div class="insights-header">
+                    <div class="insights-header-title">
+                        <svg class="insights-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 01-2 2h0a2 2 0 01-2-2v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                        <h2>Ringkasan Analisis <span class="selected-stock-ticker-full"></span></h2>
+                    </div>
+                    <div class="stock-badge-container">
+                        <span id="stock-trend-badge" class="badge">Bullish</span>
+                        <span id="stock-momentum-badge" class="badge">Netral</span>
+                    </div>
+                </div>
+                <div class="insights-content" id="analysis-insights-box">
+                    <p>Memuat analisis saham...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <div class="footer-left">
+                <p>© 2026 Indonesia Market Stock Dashboard. Hak Cipta Dilindungi.</p>
+            </div>
+            <div class="footer-right">
+                <p><strong>Pernyataan Penyangkalan (Disclaimer):</strong> Dashboard ini bukan merupakan platform trading atau penasihat investasi keuangan. Dashboard ini hanya digunakan untuk visualisasi dan interpretasi data historis saham.</p>
+            </div>
+        </footer>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

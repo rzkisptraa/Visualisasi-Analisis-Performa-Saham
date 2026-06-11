@@ -1,0 +1,208 @@
+import os
+import json
+import datetime
+import pandas as pd
+import numpy as np
+import yfinance as yf
+
+# Define tickers mapping
+TICKER_MAP = {
+    "^JKSE": "IHSG",
+    "BBCA.JK": "BBCA",
+    "BBRI.JK": "BBRI",
+    "BMRI.JK": "BMRI",
+    "TLKM.JK": "TLKM",
+    "BREN.JK": "BREN",
+    "AMMN.JK": "AMMN"
+}
+
+def main():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_dir = os.path.dirname(script_dir)
+    data_dir = os.path.join(project_dir, "data")
+    os.makedirs(data_dir, exist_ok=True)
+    
+    print("Fetching data from Yahoo Finance...")
+    
+    # We fetch 2 years of data to ensure we have enough history to compute 50-day moving average
+    # and still get 252 trading days of valid indicators.
+    end_date = datetime.date.today()
+    start_date = end_date - datetime.timedelta(days=730) # 2 years
+    
+    prices_data = {}
+    raw_dfs = {}
+    
+    for yf_ticker, clean_ticker in TICKER_MAP.items():
+        print(f"Downloading {clean_ticker} ({yf_ticker})...")
+        try:
+            df = yf.download(yf_ticker, start=start_date, end=end_date, progress=False)
+            if df.empty:
+                print(f"Warning: Could not fetch data for {clean_ticker}")
+                continue
+            
+            # Flatten multi-index if present
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+                
+            # Clean dataframe columns and index
+            df = df.reset_index()
+            df.columns = [col.lower() if isinstance(col, str) else col for col in df.columns]
+            
+            # Rename Date to date if needed
+            if 'date' not in df.columns and 'Date' in df.columns:
+                df.rename(columns={'Date': 'date'}, inplace=True)
+                
+            # Ensure standard column naming
+            df = df[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
+            
+            # Convert series to standard types
+            df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+            df['close'] = pd.to_numeric(df['close'], errors='coerce')
+            df['high'] = pd.to_numeric(df['high'], errors='coerce')
+            df['low'] = pd.to_numeric(df['low'], errors='coerce')
+            df['open'] = pd.to_numeric(df['open'], errors='coerce')
+            df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
+            
+            # Drop rows with NaN in critical columns
+            df.dropna(subset=['close', 'high', 'low'], inplace=True)
+            df.sort_values('date', inplace=True)
+            df.reset_index(drop=True, inplace=True)
+            
+            raw_dfs[clean_ticker] = df
+        except Exception as e:
+            print(f"Error downloading {clean_ticker}: {e}")
+
+    # We need to make sure we align the dates.
+    # The benchmark IHSG determines the trading days.
+    if 'IHSG' not in raw_dfs:
+        raise Exception("Failed to fetch IHSG data. Cannot proceed.")
+        
+    ihsg_df = raw_dfs['IHSG']
+    # Select the last 252 trading days from IHSG as the active window
+    ihsg_df_last_252 = ihsg_df.tail(252)
+    active_dates = ihsg_df_last_252['date'].tolist()
+    
+    # We will compute indicators for each stock using its full history first,
+    # so we don't have NaN values at the beginning of the 252-day window.
+    processed_dfs = {}
+    for ticker, df in raw_dfs.items():
+        # Calculate MA20 and MA50
+        df['ma20'] = df['close'].rolling(window=20).mean()
+        df['ma50'] = df['close'].rolling(window=50).mean()
+        
+        # Calculate Stochastic Oscillator (14, 3, 3)
+        df['low_14'] = df['low'].rolling(window=14).min()
+        df['high_14'] = df['high'].rolling(window=14).max()
+        
+        # Raw %K
+        denominator = df['high_14'] - df['low_14']
+        # Handle zero division if high and low are equal
+        df['raw_k'] = np.where(denominator != 0, 100 * (df['close'] - df['low_14']) / denominator, 50.0)
+        
+        # Smooth %K (3-day SMA)
+        df['k'] = df['raw_k'].rolling(window=3).mean()
+        # Smooth %D (3-day SMA of %K)
+        df['d'] = df['k'].rolling(window=3).mean()
+        
+        # Replace NaNs or infinities if any using ffill and bfill
+        df.replace([np.inf, -np.inf], np.nan, inplace=True)
+        df = df.ffill().bfill()
+        
+        # In case there are still NaNs (e.g. not enough data at start)
+        df.fillna(0, inplace=True)
+        
+        processed_dfs[ticker] = df
+
+    # Now we align all dataframes to the 252 active dates
+    aligned_dfs = {}
+    for ticker, df in processed_dfs.items():
+        date_df = pd.DataFrame({'date': active_dates})
+        merged = pd.merge(date_df, df, on='date', how='left')
+        
+        # Fill missing values if any (e.g. minor holiday misalignments)
+        merged = merged.ffill().bfill()
+        merged.fillna(0, inplace=True)
+        
+        # Now compute relative performance (rebased to 100 on the first day of this 252-day window)
+        first_close = merged['close'].iloc[0]
+        if first_close == 0:
+            first_close = 1.0 # prevent division by zero
+        merged['rebased'] = 100 * (merged['close'] / first_close)
+        
+        aligned_dfs[ticker] = merged
+
+    # Print record count verification
+    for ticker, df in aligned_dfs.items():
+        print(f"{ticker} has {len(df)} aligned rows")
+        
+    # Generate prices.json structure
+    prices_json = {}
+    for ticker, df in aligned_dfs.items():
+        prices_json[ticker] = []
+        for _, row in df.iterrows():
+            prices_json[ticker].append({
+                "date": row['date'],
+                "open": float(row['open']),
+                "high": float(row['high']),
+                "low": float(row['low']),
+                "close": float(row['close']),
+                "volume": int(row['volume']),
+                "ma20": float(row['ma20']),
+                "ma50": float(row['ma50']),
+                "k": float(row['k']),
+                "d": float(row['d']),
+                "rebased": float(row['rebased'])
+            })
+            
+    # Save prices.json
+    prices_path = os.path.join(data_dir, "prices.json")
+    with open(prices_path, 'w') as f:
+        json.dump(prices_json, f, indent=2)
+    print(f"Saved prices to {prices_path}")
+    
+    # Calculate returns for each stock and IHSG
+    returns = {}
+    for ticker, df in aligned_dfs.items():
+        c_first = df['close'].iloc[0]
+        c_latest = df['close'].iloc[-1]
+        if c_first != 0:
+            returns[ticker] = float((c_latest - c_first) / c_first * 100)
+        else:
+            returns[ticker] = 0.0
+        
+    # Determine top outperformer and top underperformer
+    # Exclude IHSG
+    stock_returns = {t: r for t, r in returns.items() if t != 'IHSG'}
+    top_outperformer_ticker = max(stock_returns, key=stock_returns.get)
+    top_underperformer_ticker = min(stock_returns, key=stock_returns.get)
+    
+    # Market Status (Bullish / Bearish)
+    ihsg_df_aligned = aligned_dfs['IHSG']
+    latest_ihsg_close = ihsg_df_aligned['close'].iloc[-1]
+    latest_ihsg_ma50 = ihsg_df_aligned['ma50'].iloc[-1]
+    status_pasar = "Bullish" if latest_ihsg_close > latest_ihsg_ma50 else "Bearish"
+    
+    # Generate meta.json structure
+    meta_json = {
+        "last_update": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "status_pasar": status_pasar,
+        "ihsg_current": float(latest_ihsg_close),
+        "returns": returns,
+        "top_outperformer": {
+            "ticker": top_outperformer_ticker,
+            "return": stock_returns[top_outperformer_ticker]
+        },
+        "top_underperformer": {
+            "ticker": top_underperformer_ticker,
+            "return": stock_returns[top_underperformer_ticker]
+        }
+    }
+    
+    # Save meta.json
+    meta_path = os.path.join(data_dir, "meta.json")
+    with open(meta_path, 'w') as f:
+        json.dump(meta_json, f, indent=2)
+    print(f"Saved meta data to {meta_path}")
+
+if __name__ == "__main__":
+    main()
