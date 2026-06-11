@@ -91,6 +91,23 @@
                 <div class="chart-container">
                     <canvas id="relativePerformanceChart"></canvas>
                 </div>
+                <!-- Interactive Controls for Chart 1 -->
+                <div class="chart-controls" id="chart1-controls">
+                    <div class="control-item">
+                        <span class="control-label">Zoom X:</span>
+                        <input type="range" id="chart1-zoom" class="slider-control" min="5" max="252" value="252">
+                        <span class="control-value" id="chart1-zoom-val">All</span>
+                    </div>
+                    <div class="control-item">
+                        <span class="control-label">Scroll X:</span>
+                        <input type="range" id="chart1-scroll" class="slider-control" min="0" max="0" value="0" disabled>
+                    </div>
+                    <div class="control-item">
+                        <span class="control-label">Scale Y:</span>
+                        <input type="range" id="chart1-scale-y" class="slider-control" min="50" max="150" value="100">
+                        <span class="control-value" id="chart1-scale-y-val">Auto</span>
+                    </div>
+                </div>
             </div>
         </main>
 
@@ -98,16 +115,27 @@
         <section class="analytics-section">
             <!-- Filter -->
             <div class="filter-bar card">
-                <label for="stock-select" class="filter-label">Pilih Saham untuk Analisis Detail:</label>
-                <div class="select-wrapper">
-                    <select id="stock-select" class="styled-select">
-                        <option value="BBCA">BBCA (PT Bank Central Asia Tbk)</option>
-                        <option value="BBRI">BBRI (PT Bank Rakyat Indonesia Tbk)</option>
-                        <option value="BMRI">BMRI (PT Bank Mandiri Tbk)</option>
-                        <option value="TLKM">TLKM (PT Telkom Indonesia Tbk)</option>
-                        <option value="BREN">BREN (PT Barito Renewables Energy Tbk)</option>
-                        <option value="AMMN">AMMN (PT Amman Mineral Internasional Tbk)</option>
-                    </select>
+                <div class="filter-group">
+                    <label for="stock-select" class="filter-label">Pilih Saham:</label>
+                    <div class="select-wrapper">
+                        <select id="stock-select" class="styled-select">
+                            <option value="BBCA">BBCA (PT Bank Central Asia Tbk)</option>
+                            <option value="BBRI">BBRI (PT Bank Rakyat Indonesia Tbk)</option>
+                            <option value="BMRI">BMRI (PT Bank Mandiri Tbk)</option>
+                            <option value="TLKM">TLKM (PT Telkom Indonesia Tbk)</option>
+                            <option value="BREN">BREN (PT Barito Renewables Energy Tbk)</option>
+                            <option value="AMMN">AMMN (PT Amman Mineral Internasional Tbk)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <span class="filter-label">Timeframe:</span>
+                    <div class="timeframe-buttons" id="timeframe-selector">
+                        <button class="tf-btn active" data-tf="daily">Daily</button>
+                        <button class="tf-btn" data-tf="weekly">Weekly</button>
+                        <button class="tf-btn" data-tf="monthly">Monthly</button>
+                        <button class="tf-btn" data-tf="yearly">Yearly</button>
+                    </div>
                 </div>
             </div>
 
@@ -136,6 +164,26 @@
                     </div>
                     <div class="chart-container">
                         <canvas id="momentumChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Shared Interactive Controls for Detailed Charts -->
+            <div class="card detail-controls-panel">
+                <div class="chart-controls" id="detail-controls">
+                    <div class="control-item">
+                        <span class="control-label">Zoom X (Tren & Momentum):</span>
+                        <input type="range" id="detail-zoom" class="slider-control" min="5" max="252" value="252">
+                        <span class="control-value" id="detail-zoom-val">All</span>
+                    </div>
+                    <div class="control-item">
+                        <span class="control-label">Scroll X:</span>
+                        <input type="range" id="detail-scroll" class="slider-control" min="0" max="0" value="0" disabled>
+                    </div>
+                    <div class="control-item">
+                        <span class="control-label">Scale Y (Tren):</span>
+                        <input type="range" id="detail-scale-y" class="slider-control" min="50" max="150" value="100">
+                        <span class="control-value" id="detail-scale-y-val">Auto</span>
                     </div>
                 </div>
             </div>

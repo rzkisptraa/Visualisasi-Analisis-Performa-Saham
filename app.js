@@ -6,6 +6,17 @@ let relativeChart = null;
 let trendChart = null;
 let momentumChart = null;
 
+// Timeframe & Scale States
+let currentTimeframe = 'daily';
+
+let chart1ZoomVal = 252;
+let chart1ScrollVal = 0;
+let chart1ScaleYVal = 100;
+
+let detailZoomVal = 252;
+let detailScrollVal = 0;
+let detailScaleYVal = 100;
+
 // Ticker Names Map for display
 const TICKER_NAMES = {
     "BBCA": "PT Bank Central Asia Tbk",
@@ -33,6 +44,10 @@ const horizontalLinePlugin = {
     id: 'horizontalLine',
     beforeDraw(chart) {
         const { ctx, chartArea: { left, right }, scales: { y } } = chart;
+        
+        // This plugin should only run on the Momentum Chart (which has min/max scale of 0-100)
+        if (y.min !== 0 || y.max !== 100) return;
+        
         ctx.save();
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
         ctx.lineWidth = 1;
@@ -61,7 +76,7 @@ const horizontalLinePlugin = {
     }
 };
 
-// Register plugin globally or selectively
+// Register plugin
 Chart.register(horizontalLinePlugin);
 
 // Document Ready
@@ -93,10 +108,99 @@ async function initDashboard() {
         
         // Init Selected Stock detail charts and insights
         const stockSelect = document.getElementById('stock-select');
-        updateSelectedStockView(stockSelect.value);
+        
+        // Setup global timeframe button selector
+        const tfSelector = document.getElementById('timeframe-selector');
+        tfSelector.querySelectorAll('.tf-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                tfSelector.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                currentTimeframe = e.target.dataset.tf;
+                
+                // When timeframe changes, reset bounds and scroll values
+                resetSlidersForTimeframe();
+                updateAllViews();
+            });
+        });
+        
+        // Setup Slider bindings for Chart 1 (Relative Performance)
+        const c1Zoom = document.getElementById('chart1-zoom');
+        const c1Scroll = document.getElementById('chart1-scroll');
+        const c1ScaleY = document.getElementById('chart1-scale-y');
+        
+        c1Zoom.addEventListener('input', (e) => {
+            chart1ZoomVal = parseInt(e.target.value);
+            document.getElementById('chart1-zoom-val').textContent = chart1ZoomVal === parseInt(e.target.max) ? 'All' : chart1ZoomVal;
+            
+            const N = getResampledLength('IHSG');
+            const maxScroll = N - chart1ZoomVal;
+            c1Scroll.max = maxScroll;
+            if (chart1ScrollVal > maxScroll) {
+                chart1ScrollVal = maxScroll;
+                c1Scroll.value = chart1ScrollVal;
+            }
+            c1Scroll.disabled = maxScroll <= 0;
+            
+            updateRelativeChart();
+        });
+        
+        c1Scroll.addEventListener('input', (e) => {
+            chart1ScrollVal = parseInt(e.target.value);
+            updateRelativeChart();
+        });
+        
+        c1ScaleY.addEventListener('input', (e) => {
+            chart1ScaleYVal = parseInt(e.target.value);
+            document.getElementById('chart1-scale-y-val').textContent = chart1ScaleYVal === 100 ? 'Auto' : `${(200 - chart1ScaleYVal)}%`;
+            updateRelativeChart();
+        });
+        
+        // Setup Slider bindings for detailed charts (Chart 2 & 3 linked)
+        const dZoom = document.getElementById('detail-zoom');
+        const dScroll = document.getElementById('detail-scroll');
+        const dScaleY = document.getElementById('detail-scale-y');
+        
+        dZoom.addEventListener('input', (e) => {
+            detailZoomVal = parseInt(e.target.value);
+            document.getElementById('detail-zoom-val').textContent = detailZoomVal === parseInt(e.target.max) ? 'All' : detailZoomVal;
+            
+            const N = getResampledLength(stockSelect.value);
+            const maxScroll = N - detailZoomVal;
+            dScroll.max = maxScroll;
+            if (detailScrollVal > maxScroll) {
+                detailScrollVal = maxScroll;
+                dScroll.value = detailScrollVal;
+            }
+            dScroll.disabled = maxScroll <= 0;
+            
+            updateSelectedStockView(stockSelect.value);
+        });
+        
+        dScroll.addEventListener('input', (e) => {
+            detailScrollVal = parseInt(e.target.value);
+            updateSelectedStockView(stockSelect.value);
+        });
+        
+        dScaleY.addEventListener('input', (e) => {
+            detailScaleYVal = parseInt(e.target.value);
+            document.getElementById('detail-scale-y-val').textContent = detailScaleYVal === 100 ? 'Auto' : `${(200 - detailScaleYVal)}%`;
+            updateSelectedStockView(stockSelect.value);
+        });
+        
+        // Setup initial view
+        resetSlidersForTimeframe();
+        updateAllViews();
         
         // Add dropdown change listener
         stockSelect.addEventListener('change', (e) => {
+            // When stock changes, reset the detailed controls to show all points for this timeframe
+            const N = getResampledLength(e.target.value);
+            detailZoomVal = N;
+            detailScrollVal = 0;
+            detailScaleYVal = 100;
+            dScaleY.value = 100;
+            document.getElementById('detail-scale-y-val').textContent = 'Auto';
+            
             updateSelectedStockView(e.target.value);
         });
         
@@ -180,38 +284,157 @@ function setupKPIs() {
     animateValue('top-under-pct', 0, topUnder.return, 1000, 1, "(", "%)");
 }
 
+// Helper to trigger update for all views
+function updateAllViews() {
+    updateRelativeChart();
+    const currentStock = document.getElementById('stock-select').value;
+    updateSelectedStockView(currentStock);
+}
+
+// Reset Slider ranges and parameters for a new Timeframe
+function resetSlidersForTimeframe() {
+    const N1 = getResampledLength('IHSG');
+    chart1ZoomVal = N1;
+    chart1ScrollVal = 0;
+    chart1ScaleYVal = 100;
+    
+    document.getElementById('chart1-zoom').value = N1;
+    document.getElementById('chart1-zoom').max = N1;
+    document.getElementById('chart1-scroll').value = 0;
+    document.getElementById('chart1-scroll').max = 0;
+    document.getElementById('chart1-scroll').disabled = true;
+    document.getElementById('chart1-scale-y').value = 100;
+    document.getElementById('chart1-zoom-val').textContent = 'All';
+    document.getElementById('chart1-scale-y-val').textContent = 'Auto';
+    
+    const currentStock = document.getElementById('stock-select').value;
+    const N2 = getResampledLength(currentStock);
+    detailZoomVal = N2;
+    detailScrollVal = 0;
+    detailScaleYVal = 100;
+    
+    document.getElementById('detail-zoom').value = N2;
+    document.getElementById('detail-zoom').max = N2;
+    document.getElementById('detail-scroll').value = 0;
+    document.getElementById('detail-scroll').max = 0;
+    document.getElementById('detail-scroll').disabled = true;
+    document.getElementById('detail-scale-y').value = 100;
+    document.getElementById('detail-zoom-val').textContent = 'All';
+    document.getElementById('detail-scale-y-val').textContent = 'Auto';
+}
+
+// Get the length of the resampled series for a ticker
+function getResampledLength(ticker) {
+    if (!pricesData || !pricesData[ticker]) return 0;
+    const resampled = resampleDataset(pricesData[ticker], currentTimeframe);
+    return resampled.length;
+}
+
+// Resample daily prices data based on timeframe
+function resampleDataset(data, timeframe) {
+    if (timeframe === 'daily') return data;
+    
+    const groups = {};
+    data.forEach(item => {
+        let key;
+        if (timeframe === 'weekly') {
+            key = getMondayDate(item.date);
+        } else if (timeframe === 'monthly') {
+            key = item.date.substring(0, 7);
+        } else if (timeframe === 'yearly') {
+            key = item.date.substring(0, 4);
+        }
+        
+        if (!groups[key]) {
+            groups[key] = [];
+        }
+        groups[key].push(item);
+    });
+    
+    const resampled = [];
+    Object.keys(groups).sort().forEach(key => {
+        const group = groups[key];
+        // Take the last trading record of the group to represent the period close
+        const lastItem = group[group.length - 1];
+        resampled.push({ ...lastItem });
+    });
+    
+    // Recalculate rebased percentage prices relative to the first day of resampled timeframe
+    if (resampled.length > 0) {
+        const firstClose = resampled[0].close;
+        resampled.forEach(item => {
+            item.rebased = firstClose !== 0 ? (item.close / firstClose) * 100 : 100;
+        });
+    }
+    
+    return resampled;
+}
+
+// Get the date string for Monday of the given date's week
+function getMondayDate(dateStr) {
+    const d = new Date(dateStr);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    return monday.toISOString().split('T')[0];
+}
+
+// Update Slider boundaries dynamically
+function updateSliderBounds(sliderPrefix, N, currentZoom, currentScroll) {
+    const zoomSlider = document.getElementById(sliderPrefix + '-zoom');
+    const scrollSlider = document.getElementById(sliderPrefix + '-scroll');
+    const zoomValDisplay = document.getElementById(sliderPrefix + '-zoom-val');
+    
+    // Zoom boundary
+    zoomSlider.max = N;
+    zoomSlider.min = Math.min(5, N);
+    let zoom = Math.min(currentZoom, N);
+    zoomSlider.value = zoom;
+    zoomValDisplay.textContent = zoom === N ? 'All' : zoom;
+    
+    // Scroll boundary
+    const maxScroll = N - zoom;
+    scrollSlider.max = maxScroll;
+    scrollSlider.min = 0;
+    let scroll = Math.min(currentScroll, maxScroll);
+    scrollSlider.value = scroll;
+    
+    if (maxScroll <= 0) {
+        scrollSlider.disabled = true;
+        scrollSlider.value = 0;
+        scroll = 0;
+    } else {
+        scrollSlider.disabled = false;
+    }
+    
+    return { zoom, scroll };
+}
+
+// Helper to determine min and max values of visible data arrays for vertical scaling
+function getVisibleMinMax(dataArrays) {
+    let min = Infinity;
+    let max = -Infinity;
+    dataArrays.forEach(arr => {
+        arr.forEach(val => {
+            if (val !== null && !isNaN(val)) {
+                if (val < min) min = val;
+                if (val > max) max = val;
+            }
+        });
+    });
+    if (min === Infinity) return { min: 0, max: 100 };
+    return { min, max };
+}
+
 // Chart 1: Performa Relatif
 function renderRelativeChart() {
     const ctx = document.getElementById('relativePerformanceChart').getContext('2d');
     
-    // Generate dates (X-axis labels)
-    // Extract dates from IHSG dataset
-    const labels = pricesData["IHSG"].map(item => item.date);
-    
-    // Build datasets for each ticker
-    const datasets = Object.keys(pricesData).map(ticker => {
-        const data = pricesData[ticker].map(item => item.rebased);
-        return {
-            label: ticker === 'IHSG' ? 'IHSG (Benchmark)' : ticker,
-            data: data,
-            borderColor: ASSET_COLORS[ticker] || '#FFF',
-            borderWidth: ticker === 'IHSG' ? 3 : 1.8,
-            pointRadius: 0,
-            pointHoverRadius: 4,
-            fill: false,
-            tension: 0.1,
-            zIndex: ticker === 'IHSG' ? 10 : 1
-        };
-    });
-    
-    // Sort datasets so IHSG is rendered on top
-    datasets.sort((a, b) => (a.label.includes('IHSG') ? 1 : -1));
-
     relativeChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: labels,
-            datasets: datasets
+            labels: [],
+            datasets: []
         },
         options: {
             responsive: true,
@@ -226,10 +449,7 @@ function renderRelativeChart() {
                     position: 'top',
                     labels: {
                         color: '#9CA3AF',
-                        font: {
-                            family: 'Inter',
-                            size: 11
-                        },
+                        font: { family: 'Inter', size: 11 },
                         boxWidth: 12,
                         padding: 15
                     }
@@ -240,23 +460,14 @@ function renderRelativeChart() {
                     borderWidth: 1,
                     titleColor: '#FFFFFF',
                     bodyColor: '#9CA3AF',
-                    titleFont: {
-                        family: 'Inter',
-                        weight: 'bold'
-                    },
-                    bodyFont: {
-                        family: 'Inter'
-                    },
+                    titleFont: { family: 'Inter', weight: 'bold' },
+                    bodyFont: { family: 'Inter' },
                     padding: 12,
                     callbacks: {
                         label: function(context) {
                             let label = context.dataset.label || '';
-                            if (label) {
-                                label += ': ';
-                            }
-                            if (context.parsed.y !== null) {
-                                label += context.parsed.y.toFixed(2) + '%';
-                            }
+                            if (label) label += ': ';
+                            if (context.parsed.y !== null) label += context.parsed.y.toFixed(2) + '%';
                             return label;
                         }
                     }
@@ -264,38 +475,79 @@ function renderRelativeChart() {
             },
             scales: {
                 x: {
-                    grid: {
-                        color: 'rgba(42, 52, 65, 0.3)',
-                        drawTicks: false
-                    },
-                    ticks: {
-                        color: '#9CA3AF',
-                        font: {
-                            family: 'Inter',
-                            size: 10
-                        },
-                        maxTicksLimit: 12
-                    }
+                    grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
+                    ticks: { color: '#9CA3AF', font: { family: 'Inter', size: 10 }, maxTicksLimit: 12 }
                 },
                 y: {
-                    grid: {
-                        color: 'rgba(42, 52, 65, 0.3)',
-                        drawTicks: false
-                    },
+                    grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
                     ticks: {
                         color: '#9CA3AF',
-                        font: {
-                            family: 'Inter',
-                            size: 10
-                        },
-                        callback: function(value) {
-                            return value.toFixed(0) + '%';
-                        }
+                        font: { family: 'Inter', size: 10 },
+                        callback: function(value) { return value.toFixed(0) + '%'; }
                     }
                 }
             }
         }
     });
+}
+
+// Update Chart 1 dynamically based on resampled and sliced datasets
+function updateRelativeChart() {
+    if (!relativeChart || !pricesData) return;
+    
+    // Determine bounds using IHSG length
+    const rawIHSG = pricesData["IHSG"];
+    const resampledIHSG = resampleDataset(rawIHSG, currentTimeframe);
+    const N = resampledIHSG.length;
+    
+    // Synchronize bounds
+    const bounds = updateSliderBounds('chart1', N, chart1ZoomVal, chart1ScrollVal);
+    chart1ZoomVal = bounds.zoom;
+    chart1ScrollVal = bounds.scroll;
+    
+    // Slice dates using the scroll indices
+    const slicedIHSG = resampledIHSG.slice(chart1ScrollVal, chart1ScrollVal + chart1ZoomVal);
+    const labels = slicedIHSG.map(item => item.date);
+    
+    // Assemble resampled & sliced datasets for each ticker
+    const datasets = Object.keys(pricesData).map(ticker => {
+        const resampled = resampleDataset(pricesData[ticker], currentTimeframe);
+        const sliced = resampled.slice(chart1ScrollVal, chart1ScrollVal + chart1ZoomVal);
+        const rebasedData = sliced.map(item => item.rebased);
+        return {
+            label: ticker === 'IHSG' ? 'IHSG (Benchmark)' : ticker,
+            data: rebasedData,
+            borderColor: ASSET_COLORS[ticker] || '#FFF',
+            borderWidth: ticker === 'IHSG' ? 3 : 1.8,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            fill: false,
+            tension: 0.1,
+            zIndex: ticker === 'IHSG' ? 10 : 1
+        };
+    });
+    
+    // Sort datasets so IHSG is rendered on top
+    datasets.sort((a, b) => (a.label.includes('IHSG') ? 1 : -1));
+    
+    // Manual scale Y override
+    let yMin = undefined;
+    let yMax = undefined;
+    if (chart1ScaleYVal !== 100) {
+        const visibleVals = datasets.map(d => d.data).flat();
+        const mm = getVisibleMinMax([visibleVals]);
+        const center = (mm.min + mm.max) / 2;
+        // Adjust bounds: if scaleYVal < 100 (zoom in), range is compressed. if > 100 (zoom out), range expanded.
+        const range = ((mm.max - mm.min) / 2) * (chart1ScaleYVal / 100) * 1.05;
+        yMin = center - range;
+        yMax = center + range;
+    }
+    
+    relativeChart.data.labels = labels;
+    relativeChart.data.datasets = datasets;
+    relativeChart.options.scales.y.min = yMin;
+    relativeChart.options.scales.y.max = yMax;
+    relativeChart.update();
 }
 
 // Update Detail View (Chart 2, Chart 3, and Insights)
@@ -311,13 +563,24 @@ function updateSelectedStockView(ticker) {
     const stockData = pricesData[ticker];
     if (!stockData) return;
     
-    // Prepare Data
-    const labels = stockData.map(item => item.date);
-    const closePrices = stockData.map(item => item.close);
-    const ma20 = stockData.map(item => item.ma20);
-    const ma50 = stockData.map(item => item.ma50);
-    const k = stockData.map(item => item.k);
-    const d = stockData.map(item => item.d);
+    // Resample stock daily data
+    const resampled = resampleDataset(stockData, currentTimeframe);
+    const N = resampled.length;
+    
+    // Synchronize bounds for the detailed sliders
+    const bounds = updateSliderBounds('detail', N, detailZoomVal, detailScrollVal);
+    detailZoomVal = bounds.zoom;
+    detailScrollVal = bounds.scroll;
+    
+    // Slice data
+    const sliced = resampled.slice(detailScrollVal, detailScrollVal + detailZoomVal);
+    
+    const labels = sliced.map(item => item.date);
+    const closePrices = sliced.map(item => item.close);
+    const ma20 = sliced.map(item => item.ma20);
+    const ma50 = sliced.map(item => item.ma50);
+    const k = sliced.map(item => item.k);
+    const d = sliced.map(item => item.d);
     
     // 1. Render/Update Chart 2 (Trend)
     updateTrendChart(labels, closePrices, ma20, ma50, ticker);
@@ -325,8 +588,8 @@ function updateSelectedStockView(ticker) {
     // 2. Render/Update Chart 3 (Momentum)
     updateMomentumChart(labels, k, d);
     
-    // 3. Generate Automatic Insights
-    generateInsights(ticker, stockData);
+    // 3. Generate Automatic Insights (Analyze only the visible range)
+    generateInsights(ticker, sliced);
 }
 
 // Chart 2: Trend Chart
@@ -366,19 +629,23 @@ function updateTrendChart(labels, closePrices, ma20, ma50, ticker) {
         }
     ];
     
+    // Manual scale Y override for Trend Chart
+    let yMin = undefined;
+    let yMax = undefined;
+    if (detailScaleYVal !== 100) {
+        const visibleVals = [...closePrices, ...ma20, ...ma50];
+        const mm = getVisibleMinMax([visibleVals]);
+        const center = (mm.min + mm.max) / 2;
+        const range = ((mm.max - mm.min) / 2) * (detailScaleYVal / 100) * 1.05;
+        yMin = center - range;
+        yMax = center + range;
+    }
+    
     if (trendChart) {
         trendChart.data.labels = labels;
         trendChart.data.datasets = datasets;
-        trendChart.options.plugins.tooltip.callbacks.label = function(context) {
-            let label = context.dataset.label || '';
-            if (label) {
-                label += ': Rp ';
-            }
-            if (context.parsed.y !== null) {
-                label += context.parsed.y.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-            }
-            return label;
-        };
+        trendChart.options.scales.y.min = yMin;
+        trendChart.options.scales.y.max = yMax;
         trendChart.update();
     } else {
         trendChart = new Chart(ctx, {
@@ -410,9 +677,7 @@ function updateTrendChart(labels, closePrices, ma20, ma50, ticker) {
                         callbacks: {
                             label: function(context) {
                                 let label = context.dataset.label || '';
-                                if (label) {
-                                    label += ': Rp ';
-                                }
+                                if (label) label += ': Rp ';
                                 if (context.parsed.y !== null) {
                                     label += context.parsed.y.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
                                 }
@@ -423,17 +688,15 @@ function updateTrendChart(labels, closePrices, ma20, ma50, ticker) {
                 },
                 scales: {
                     x: {
-                        grid: { color: 'rgba(42, 52, 65, 0.3)', drawTicks: false },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
                         ticks: { color: '#9CA3AF', font: { family: 'Inter', size: 10 }, maxTicksLimit: 8 }
                     },
                     y: {
-                        grid: { color: 'rgba(42, 52, 65, 0.3)', drawTicks: false },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
                         ticks: {
                             color: '#9CA3AF',
                             font: { family: 'Inter', size: 10 },
-                            callback: function(value) {
-                                return 'Rp ' + value.toLocaleString('id-ID');
-                            }
+                            callback: function(value) { return 'Rp ' + value.toLocaleString('id-ID'); }
                         }
                     }
                 }
@@ -499,12 +762,8 @@ function updateMomentumChart(labels, k, d) {
                         callbacks: {
                             label: function(context) {
                                 let label = context.dataset.label || '';
-                                if (label) {
-                                    label += ': ';
-                                }
-                                if (context.parsed.y !== null) {
-                                    label += context.parsed.y.toFixed(2);
-                                }
+                                if (label) label += ': ';
+                                if (context.parsed.y !== null) label += context.parsed.y.toFixed(2);
                                 return label;
                             }
                         }
@@ -512,13 +771,13 @@ function updateMomentumChart(labels, k, d) {
                 },
                 scales: {
                     x: {
-                        grid: { color: 'rgba(42, 52, 65, 0.3)', drawTicks: false },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
                         ticks: { color: '#9CA3AF', font: { family: 'Inter', size: 10 }, maxTicksLimit: 8 }
                     },
                     y: {
                         min: 0,
                         max: 100,
-                        grid: { color: 'rgba(42, 52, 65, 0.3)', drawTicks: false },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
                         ticks: { color: '#9CA3AF', font: { family: 'Inter', size: 10 } }
                     }
                 }
@@ -529,6 +788,8 @@ function updateMomentumChart(labels, k, d) {
 
 // Generate Insights Automatically
 function generateInsights(ticker, stockData) {
+    if (stockData.length === 0) return;
+    
     const latest = stockData[stockData.length - 1];
     const prev = stockData[stockData.length - 2] || latest;
     const first = stockData[0];
@@ -566,7 +827,7 @@ function generateInsights(ticker, stockData) {
         shortTermTrend = `Di jangka pendek, harga tertekan di bawah MA20 (Rp ${ma20.toLocaleString('id-ID')}), menunjukkan adanya pelemahan tren jangka pendek.`;
     }
     
-    // Check for Golden Cross/Death Cross crossover in the last 5 days
+    // Check for Golden Cross/Death Cross crossover in the last 5 days of this window
     let crossoverInsight = "";
     let crossoverDetected = false;
     for (let i = stockData.length - 1; i >= Math.max(1, stockData.length - 5); i--) {
@@ -620,14 +881,14 @@ function generateInsights(ticker, stockData) {
     const isOutperformer = parseFloat(stockReturn) > parseFloat(ihsgReturn);
     
     if (isOutperformer) {
-        relativePerformanceText = `Saham <strong>${ticker}</strong> berhasil <span class="text-success">mengungguli</span> indeks IHSG (Outperformer) selama 252 hari perdagangan terakhir, dengan total imbal hasil sebesar <strong>${stockReturn}%</strong> dibandingkan IHSG yang sebesar <strong>${ihsgReturn}%</strong>.`;
+        relativePerformanceText = `Saham <strong>${ticker}</strong> berhasil <span class="text-success">mengungguli</span> indeks IHSG (Outperformer) selama rentang waktu visualisasi ini, dengan total imbal hasil sebesar <strong>${stockReturn}%</strong> dibandingkan IHSG yang sebesar <strong>${ihsgReturn}%</strong>.`;
     } else {
-        relativePerformanceText = `Saham <strong>${ticker}</strong> bergerak <span class="text-danger">tertinggal</span> dibandingkan indeks IHSG (Underperformer) selama 252 hari perdagangan terakhir, dengan imbal hasil total sebesar <strong>${stockReturn}%</strong> dibandingkan IHSG yang sebesar <strong>${ihsgReturn}%</strong>.`;
+        relativePerformanceText = `Saham <strong>${ticker}</strong> bergerak <span class="text-danger">tertinggal</span> dibandingkan indeks IHSG (Underperformer) selama rentang waktu visualisasi ini, dengan imbal hasil total sebesar <strong>${stockReturn}%</strong> dibandingkan IHSG yang sebesar <strong>${ihsgReturn}%</strong>.`;
     }
     
     // Assemble final bullet points
     let htmlContent = `
-        <p>Berdasarkan analisis data penutupan historis dan indikator teknikal untuk saham <strong>${TICKER_NAMES[ticker]} (${ticker})</strong>, berikut rangkuman analisis tren dan momentumnya:</p>
+        <p>Berdasarkan analisis data penutupan historis dan indikator teknikal untuk saham <strong>${TICKER_NAMES[ticker]} (${ticker})</strong> dalam rentang waktu yang ditampilkan, berikut rangkuman analisis tren dan momentumnya:</p>
         <ul>
             <li><strong>Analisis Performa Relatif:</strong> ${relativePerformanceText}</li>
             <li><strong>Analisis Tren (Moving Average):</strong> Saham ${ticker} saat ini menunjukkan tren ${trendInsightText} ${shortTermTrend}</li>
