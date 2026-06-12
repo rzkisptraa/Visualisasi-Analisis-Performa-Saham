@@ -720,6 +720,13 @@ function renderRelativeChart() {
                     titleSpacing: 8,
                     bodySpacing: 6,
                     callbacks: {
+                        title: function(context) {
+                            if (!context || context.length === 0) return "";
+                            const dateStr = context[0].label;
+                            const d = new Date(dateStr);
+                            if (isNaN(d.getTime())) return dateStr;
+                            return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+                        },
                         label: function(context) {
                             let label = context.dataset.label || '';
                             if (label) label += ': ';
@@ -765,16 +772,27 @@ function renderRelativeChart() {
             },
             scales: {
                 x: {
-                    type: 'timeseries',
-                    time: { unit: 'year', tooltipFormat: 'dd MMM yyyy' },
-                    adapters: { date: { locale: 'id' } },
                     grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
                     ticks: {
                         color: '#9CA3AF',
                         font: { family: 'Inter', size: 11, weight: '500' },
                         maxTicksLimit: 12,
-                        align: 'inner',
-                        padding: 10
+                        padding: 10,
+                        callback: function(value, index, values) {
+                            if (!relativeChart) return "";
+                            const dateStr = relativeChart.data.labels[index];
+                            if (!dateStr) return "";
+                            const d = new Date(dateStr);
+                            if (isNaN(d.getTime())) return dateStr;
+                            
+                            if (relativeTimeframe === 'yearly') {
+                                return d.toLocaleDateString('id-ID', { year: 'numeric' });
+                            } else if (relativeTimeframe === 'monthly') {
+                                return d.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+                            } else {
+                                return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+                            }
+                        }
                     }
                 },
                 y: {
@@ -810,9 +828,6 @@ function updateRelativeChart() {
     const resampledIHSG = resampleDataset(rawIHSG, relativeTimeframe);
     const labels = resampledIHSG.map(item => item.date);
     
-    // Set time unit dynamically based on timeframe
-    relativeChart.options.scales.x.time.unit = getRelativeTimeUnit(relativeTimeframe);
-    
     const datasets = Object.keys(pricesData).map(ticker => {
         const resampled = resampleDataset(pricesData[ticker], relativeTimeframe);
         
@@ -820,31 +835,28 @@ function updateRelativeChart() {
         const firstActiveItem = rawData.find(item => item.active !== false);
         const firstClose = firstActiveItem ? firstActiveItem.close : null;
         
-        // Filter out inactive items to avoid plotting flat zero lines before IPO
-        const activeResampled = resampled.filter(item => item.active !== false);
-        
-        const dataPoints = activeResampled.map(item => ({
-            x: new Date(item.date).getTime(),
-            y: item.rebased
-        }));
-        
-        const pricesList = activeResampled.map(item => item.close);
-        
-        // Prepend the actual IPO date at 0.0% so the performance line starts exactly at 0.0% at its start day
-        if (firstActiveItem && dataPoints.length > 0) {
-            const firstActiveTime = new Date(firstActiveItem.date).getTime();
-            if (dataPoints[0].x !== firstActiveTime) {
-                dataPoints.unshift({
-                    x: firstActiveTime,
-                    y: 0.0
-                });
-                pricesList.unshift(firstActiveItem.close);
+        const pricesList = [];
+        const alignedData = labels.map(dateStr => {
+            const match = resampled.find(item => item.date === dateStr);
+            if (match && match.active !== false) {
+                pricesList.push(match.close);
+                return match.rebased;
+            } else {
+                pricesList.push(null);
+                return null;
             }
+        });
+        
+        // Ensure that the first active index gets an exact 0.0% rebased start point
+        const firstActiveIdx = alignedData.findIndex(val => val !== null);
+        if (firstActiveIdx !== -1 && firstActiveItem) {
+            alignedData[firstActiveIdx] = 0.0;
+            pricesList[firstActiveIdx] = firstActiveItem.close;
         }
         
         return {
             label: ticker === 'IHSG' ? 'IHSG (Pasar)' : ticker,
-            data: dataPoints,
+            data: alignedData,
             prices: pricesList,
             firstClose: firstClose,
             borderColor: ASSET_COLORS[ticker] || '#FFF',
@@ -867,12 +879,8 @@ function updateRelativeChart() {
     const minIndex = Math.max(0, N - defaultZoom);
     const maxIndex = N - 1;
     
-    // Set time scale limits in milliseconds
-    const minTime = new Date(labels[minIndex]).getTime();
-    const maxTime = new Date(labels[maxIndex]).getTime();
-    
-    relativeChart.options.scales.x.min = minTime;
-    relativeChart.options.scales.x.max = maxTime;
+    relativeChart.options.scales.x.min = minIndex;
+    relativeChart.options.scales.x.max = maxIndex;
     
     // Assign datasets to calculate target Y scale ranges
     relativeChart.data.datasets = datasets;
@@ -882,7 +890,7 @@ function updateRelativeChart() {
     const flatDatasets = datasets.map(ds => {
         return {
             ...ds,
-            data: ds.data.map(pt => pt === null ? null : { x: pt.x, y: 0.0 })
+            data: ds.data.map(val => val === null ? null : 0.0)
         };
     });
     relativeChart.data.datasets = flatDatasets;
