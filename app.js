@@ -40,6 +40,9 @@ let _trendTimestamps = [];
 // RAF handle to throttle crosshair redraws to 60fps
 let _crosshairRafId = null;
 
+// RAF handle to throttle timeline scaling drag updates to 60fps
+let _scalingRafId = null;
+
 
 // Ticker Names Map for display
 const TICKER_NAMES = {
@@ -387,6 +390,47 @@ function getMondayDate(dateStr) {
     return monday.toISOString().split('T')[0];
 }
 
+// Helper to find index range of visible data points using binary search for performance
+function findVisibleRange(dataArray, xMin, xMax, isTimeScale) {
+    let start = 0;
+    let end = dataArray.length - 1;
+    
+    if (isTimeScale) {
+        // Binary search for first index >= xMin
+        let low = 0, high = dataArray.length - 1;
+        while (low <= high) {
+            let mid = (low + high) >> 1;
+            let val = dataArray[mid] ? dataArray[mid].x : 0;
+            if (val >= xMin) {
+                start = mid;
+                high = mid - 1;
+            } else {
+                low = mid + 1;
+            }
+        }
+        
+        // Binary search for last index <= xMax
+        low = start;
+        high = dataArray.length - 1;
+        while (low <= high) {
+            let mid = (low + high) >> 1;
+            let val = dataArray[mid] ? dataArray[mid].x : 0;
+            if (val <= xMax) {
+                end = mid;
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+    } else {
+        // Category scale is index-based
+        start = Math.max(0, Math.floor(xMin));
+        end = Math.min(dataArray.length - 1, Math.ceil(xMax));
+    }
+    
+    return { start, end };
+}
+
 // Helper to determine min and max values of visible data arrays for vertical scaling
 // Handles both plain numbers (index-based axis) and OHLC/line objects ({x, o, h, l, c} or {x, y})
 function autoScaleY(chart) {
@@ -427,16 +471,23 @@ function autoScaleY(chart) {
             const bounds = boundsByAxis[axisID];
             
             const dataArray = dataset.data || [];
-            dataArray.forEach((item, idx) => {
-                if (item === null || item === undefined) return;
+            if (dataArray.length === 0) return;
+            
+            let start = 0;
+            let end = dataArray.length - 1;
+            if (hasRange) {
+                const range = findVisibleRange(dataArray, xMin, xMax, isTimeScale);
+                start = range.start;
+                end = range.end;
+            }
+            
+            for (let idx = start; idx <= end; idx++) {
+                const item = dataArray[idx];
+                if (item === null || item === undefined) continue;
                 
                 let valMin, valMax;
                 
                 if (isTimeScale) {
-                    // For time scales, items are objects like {x, o, h, l, c} or {x, y}
-                    const t = item.x;
-                    if (hasRange && (t < xMin || t > xMax)) return;
-                    
                     if (item.o !== undefined && item.h !== undefined && item.l !== undefined && item.c !== undefined) {
                         valMin = item.l;
                         valMax = item.h;
@@ -444,24 +495,21 @@ function autoScaleY(chart) {
                         valMin = item.y;
                         valMax = item.y;
                     } else {
-                        return;
+                        continue;
                     }
                 } else {
-                    // For category scales, items are plain numbers or {y} objects, and checked by index
-                    if (hasRange && (idx < xMin || idx > xMax)) return;
-                    
                     const val = (typeof item === 'object' && item.y !== undefined) ? item.y : item;
-                    if (typeof val !== 'number' || isNaN(val)) return;
+                    if (typeof val !== 'number' || isNaN(val)) continue;
                     valMin = val;
                     valMax = val;
                 }
                 
-                if (valMin === null || valMin === undefined || isNaN(valMin)) return;
-                if (valMax === null || valMax === undefined || isNaN(valMax)) return;
+                if (valMin === null || valMin === undefined || isNaN(valMin)) continue;
+                if (valMax === null || valMax === undefined || isNaN(valMax)) continue;
                 
                 if (valMin < bounds.min) bounds.min = valMin;
                 if (valMax > bounds.max) bounds.max = valMax;
-            });
+            }
         });
     }
     
@@ -659,6 +707,7 @@ function renderRelativeChart() {
             datasets: []
         },
         options: {
+            normalized: true,
             responsive: true,
             maintainAspectRatio: false,
             interaction: {
@@ -1183,6 +1232,7 @@ function updateTrendChart(resampled, ticker, initialMin, initialMax) {
                     borderWidth: 1.5
                 }
             },
+            normalized: true,
             responsive: true, maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false, axis: 'x' },
             plugins: {
@@ -1326,6 +1376,7 @@ function updateMACDChart(resampled, initialMin, initialMax) {
         data: { datasets: datasets },
         plugins: [crosshairPlugin],
         options: {
+            normalized: true,
             responsive: true,
             maintainAspectRatio: false,
             interaction: {
@@ -2388,6 +2439,7 @@ function updateIHSGTrendChart() {
             ]
         },
         options: {
+            normalized: true,
             responsive: true,
             maintainAspectRatio: false,
             interaction: {
@@ -2605,6 +2657,8 @@ window.addEventListener('mousemove', (e) => {
         const totalN = data.length;
         const isTimeScale = chart.options.scales.x.type === 'timeseries' || chart.options.scales.x.type === 'time';
         
+        let targetMin, targetMax;
+        
         if (isTimeScale) {
             const latestTime = (data[data.length - 1] && data[data.length - 1].x) || (chart.data.labels && chart.data.labels[chart.data.labels.length - 1]);
             const firstTime = (data[0] && data[0].x) || (chart.data.labels && chart.data.labels[0]);
@@ -2616,8 +2670,8 @@ window.addEventListener('mousemove', (e) => {
                 const maxRange = totalDuration;
                 newRange = Math.max(minRange, Math.min(maxRange, newRange));
                 
-                chart.options.scales.x.max = latestTime;
-                chart.options.scales.x.min = latestTime - newRange;
+                targetMax = latestTime;
+                targetMin = latestTime - newRange;
             }
         } else {
             const minRange = 5;
@@ -2625,25 +2679,34 @@ window.addEventListener('mousemove', (e) => {
             newRange = Math.max(minRange, Math.min(maxRange, newRange));
             
             const latestIdx = totalN - 1;
-            chart.options.scales.x.max = latestIdx;
-            chart.options.scales.x.min = Math.max(0, latestIdx - Math.round(newRange));
+            targetMax = latestIdx;
+            targetMin = Math.max(0, latestIdx - Math.round(newRange));
         }
         
-        autoScaleY(chart);
-        chart.update('none');
+        // Throttle scaling updates to screen refresh rate via requestAnimationFrame
+        if (_scalingRafId) cancelAnimationFrame(_scalingRafId);
+        _scalingRafId = requestAnimationFrame(() => {
+            _scalingRafId = null;
+            
+            chart.options.scales.x.min = targetMin;
+            chart.options.scales.x.max = targetMax;
+            
+            autoScaleY(chart);
+            chart.update('none');
 
-        // Synchronize scale shifts across linked detail charts (Trend & MACD/Volume)
-        if (chart === trendChart && volumeChart) {
-            syncXAxis(trendChart, volumeChart);
-            autoScaleY(volumeChart);
-            volumeChart.update('none');
-            updateInsightsFromChart();
-        } else if (chart === volumeChart && trendChart) {
-            syncXAxis(volumeChart, trendChart);
-            autoScaleY(trendChart);
-            trendChart.update('none');
-            updateInsightsFromChart();
-        }
+            // Synchronize scale shifts across linked detail charts (Trend & MACD/Volume)
+            if (chart === trendChart && volumeChart) {
+                syncXAxis(trendChart, volumeChart);
+                autoScaleY(volumeChart);
+                volumeChart.update('none');
+                updateInsightsFromChart();
+            } else if (chart === volumeChart && trendChart) {
+                syncXAxis(volumeChart, trendChart);
+                autoScaleY(trendChart);
+                trendChart.update('none');
+                updateInsightsFromChart();
+            }
+        });
     }
 });
 
