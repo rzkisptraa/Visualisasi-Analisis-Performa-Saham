@@ -1918,14 +1918,10 @@ function generateInsights(ticker, stockData, fullResampled) {
     let htmlContent = `
         <p>Berdasarkan analisis data penutupan historis dan momentum MACD untuk saham <strong>${TICKER_NAMES[ticker]} (${ticker})</strong> dalam rentang waktu yang ditampilkan, berikut rangkuman analisis tren dan momentumnya:</p>
         <ul>
-            <li><strong>Performa:</strong> ${relativePerformanceText}</li>
             <li><strong>Tren:</strong> Saham ${ticker} saat ini menunjukkan tren ${trendInsightText} ${shortTermTrend}</li>
             <li><strong>Momentum:</strong> ${momentumInsightText}</li>
             <li><strong>Konfirmasi:</strong> ${confirmationText}</li>
         </ul>
-        <p style="margin-top: 16px; font-size: 0.9rem; color: var(--text-secondary); font-style: italic;">
-            *Catatan: Analisis ini diperbarui secara otomatis berdasarkan data transaksi penutupan terakhir dan tidak ditujukan sebagai rekomendasi finansial mutlak.
-        </p>
     `;
 
     document.getElementById('analysis-insights-box').innerHTML = htmlContent;
