@@ -240,8 +240,7 @@ async function initDashboard() {
 
 // Setup static metadata values
 function setupMetadata() {
-    const el = document.getElementById('last-update-time');
-    if (el) el.textContent = metaData.last_update;
+    document.getElementById('last-update-time').textContent = metaData.last_update;
 }
 
 /// Easing function: ease-out cubic (fast start, decelerates to final value)
