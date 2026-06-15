@@ -831,6 +831,20 @@ function handleChartReset(chart) {
     chart.update('none');
 }
 
+// Helper to parse hex/rgba to rgba with custom opacity
+function hexToRgba(colorStr, alpha) {
+    if (!colorStr) return `rgba(255,255,255,${alpha})`;
+    if (colorStr.startsWith('rgba')) {
+        return colorStr.replace(/[\d\.]+\)$/, alpha + ')');
+    }
+    let c = colorStr.substring(1);
+    if (c.length === 3) c = c[0] + c[0] + c[1] + c[1] + c[2] + c[2];
+    const r = parseInt(c.substring(0, 2), 16);
+    const g = parseInt(c.substring(2, 4), 16);
+    const b = parseInt(c.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 // Chart 1: Performa Relatif
 function renderRelativeChart() {
     const ctx = document.getElementById('relativePerformanceChart').getContext('2d');
@@ -893,30 +907,60 @@ function renderRelativeChart() {
                     onClick: function(e, legendItem, legend) {
                         const index = legendItem.datasetIndex;
                         const ci = legend.chart;
+                        const dataset = ci.data.datasets[index];
 
-                        // Temporarily enable smooth animations for this update
-                        ci.options.animation = {
-                            duration: 500,
-                            easing: 'easeOutCubic'
-                        };
+                        const origColor = dataset._originalBorderColor || dataset.borderColor;
+                        dataset._originalBorderColor = origColor;
+
+                        const duration = 280; // Smooth 280ms fade transition
+                        const startTime = performance.now();
 
                         if (ci.isDatasetVisible(index)) {
-                            ci.hide(index);
-                            legendItem.hidden = true;
+                            // Smooth Fade Out of the line
+                            function fadeOutStep(now) {
+                                const elapsed = now - startTime;
+                                const progress = Math.min(elapsed / duration, 1);
+                                const alpha = 1 - progress;
+
+                                dataset.borderColor = hexToRgba(origColor, alpha);
+                                ci.update('none');
+
+                                if (progress < 1) {
+                                    requestAnimationFrame(fadeOutStep);
+                                } else {
+                                    ci.hide(index);
+                                    legendItem.hidden = true;
+                                    dataset.borderColor = origColor;
+                                    autoScaleY(ci);
+                                    ci.update('none');
+                                }
+                            }
+                            requestAnimationFrame(fadeOutStep);
                         } else {
+                            // Smooth Fade In of the line
+                            dataset.borderColor = hexToRgba(origColor, 0);
                             ci.show(index);
                             legendItem.hidden = false;
-                        }
+                            autoScaleY(ci);
+                            ci.update('none');
 
-                        autoScaleY(ci);
-                        ci.update();
+                            function fadeInStep(now) {
+                                const elapsed = now - startTime;
+                                const progress = Math.min(elapsed / duration, 1);
+                                const alpha = progress;
 
-                        // Reset animation to false after transition finishes to keep drag scaling crisp
-                        setTimeout(() => {
-                            if (ci && ci.options) {
-                                ci.options.animation = false;
+                                dataset.borderColor = hexToRgba(origColor, alpha);
+                                ci.update('none');
+
+                                if (progress < 1) {
+                                    requestAnimationFrame(fadeInStep);
+                                } else {
+                                    dataset.borderColor = origColor;
+                                    ci.update('none');
+                                }
                             }
-                        }, 550);
+                            requestAnimationFrame(fadeInStep);
+                        }
                     }
                 },
                 tooltip: {
