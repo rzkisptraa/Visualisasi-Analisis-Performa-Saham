@@ -124,14 +124,14 @@ function renderRelativeChart() {
                     backgroundColor: '#0B0F14',
                     borderColor: 'rgba(255, 255, 255, 0.15)',
                     borderWidth: 1,
-                    borderRadius: 6,
+                    borderRadius: 8,
                     titleColor: '#FFFFFF',
                     bodyColor: '#E5E7EB',
-                    titleFont: { family: 'Inter', size: 12, weight: '600' },
-                    bodyFont: { family: 'Inter', size: 11 },
-                    padding: 12,
-                    titleSpacing: 6,
-                    bodySpacing: 4,
+                    titleFont: { family: 'Inter', size: 15, weight: '600' },
+                    bodyFont: { family: 'Inter', size: 14 },
+                    padding: 15,
+                    titleSpacing: 8,
+                    bodySpacing: 6,
                     itemSort: function (a, b) {
                         const valA = (a.parsed && a.parsed.y !== null && a.parsed.y !== undefined) ? a.parsed.y : -Infinity;
                         const valB = (b.parsed && b.parsed.y !== null && b.parsed.y !== undefined) ? b.parsed.y : -Infinity;

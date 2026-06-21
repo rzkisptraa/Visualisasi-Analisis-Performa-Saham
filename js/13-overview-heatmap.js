@@ -103,14 +103,14 @@ function updateIHSGTrendChart() {
                     backgroundColor: '#0B0F14',
                     borderColor: 'rgba(255, 255, 255, 0.15)',
                     borderWidth: 1,
-                    borderRadius: 6,
-                    padding: 10,
+                    borderRadius: 8,
+                    padding: 13,
                     titleColor: '#FFFFFF',
                     bodyColor: '#E5E7EB',
-                    titleFont: { family: 'Inter', size: 11, weight: '600' },
-                    bodyFont: { family: 'Inter', size: 10 },
-                    titleSpacing: 5,
-                    bodySpacing: 4,
+                    titleFont: { family: 'Inter', size: 14, weight: '600' },
+                    bodyFont: { family: 'Inter', size: 13 },
+                    titleSpacing: 7,
+                    bodySpacing: 6,
                     callbacks: {
                         label: function (context) {
                             let label = context.dataset.label || '';

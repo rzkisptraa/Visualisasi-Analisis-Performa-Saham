@@ -314,14 +314,14 @@ function updateTrendChart(resampled, ticker, initialMin, initialMax) {
                     backgroundColor: '#0B0F14',
                     borderColor: 'rgba(255, 255, 255, 0.15)',
                     borderWidth: 1,
-                    borderRadius: 6,
-                    padding: 12,
+                    borderRadius: 8,
+                    padding: 15,
                     titleColor: '#FFFFFF',
                     bodyColor: '#E5E7EB',
-                    titleFont: { family: 'Inter', size: 12, weight: '600' },
-                    bodyFont: { family: 'Inter', size: 11 },
-                    titleSpacing: 6,
-                    bodySpacing: 4,
+                    titleFont: { family: 'Inter', size: 15, weight: '600' },
+                    bodyFont: { family: 'Inter', size: 14 },
+                    titleSpacing: 8,
+                    bodySpacing: 6,
                     callbacks: {
                         label: function (context) {
                             var ds = context.dataset;
@@ -544,14 +544,14 @@ function updateMACDChart(resampled, initialMin, initialMax) {
                     backgroundColor: '#0B0F14',
                     borderColor: 'rgba(255, 255, 255, 0.15)',
                     borderWidth: 1,
-                    borderRadius: 6,
-                    padding: 12,
+                    borderRadius: 8,
+                    padding: 15,
                     titleColor: '#FFFFFF',
                     bodyColor: '#E5E7EB',
-                    titleFont: { family: 'Inter', size: 12, weight: '600' },
-                    bodyFont: { family: 'Inter', size: 11 },
-                    titleSpacing: 6,
-                    bodySpacing: 4,
+                    titleFont: { family: 'Inter', size: 15, weight: '600' },
+                    bodyFont: { family: 'Inter', size: 14 },
+                    titleSpacing: 8,
+                    bodySpacing: 6,
                     callbacks: {
                         label: function (context) {
                             let label = context.dataset.label || '';
