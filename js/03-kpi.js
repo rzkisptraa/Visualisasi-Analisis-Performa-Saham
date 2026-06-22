@@ -106,15 +106,17 @@ function setupKPIs() {
         triggerCountup(statusVal, STAGGER[1]);
     }
 
-    // Calculate weekly returns for all stocks (excluding IHSG) based on the latest week's open-to-close return (following TradingView weekly candle logic)
+    // Calculate weekly returns for all stocks (excluding IHSG)
+    // Uses close-to-close: close minggu ini vs close minggu lalu (standar broker)
     const stockReturns = {};
     Object.keys(pricesData).forEach(ticker => {
         if (ticker === 'IHSG') return;
         const weeklyData = resampleDataset(pricesData[ticker], 'weekly');
-        if (weeklyData && weeklyData.length > 0) {
+        if (weeklyData && weeklyData.length > 1) {
             const latestItem = weeklyData[weeklyData.length - 1];
-            if (latestItem && latestItem.open > 0) {
-                stockReturns[ticker] = ((latestItem.close - latestItem.open) / latestItem.open) * 100;
+            const prevItem = weeklyData[weeklyData.length - 2];
+            if (prevItem && prevItem.close > 0) {
+                stockReturns[ticker] = ((latestItem.close - prevItem.close) / prevItem.close) * 100;
             } else {
                 stockReturns[ticker] = 0;
             }
