@@ -2,10 +2,10 @@ name: Update Market Data Daily
 
 on:
   schedule:
-    # Runs at 10:00 UTC (17:00 WIB) every Monday to Friday.
-    # The Indonesian Stock Exchange (IDX) closes at 16:00 WIB (09:00 UTC).
-    # This gives it a 1-hour buffer to ensure Yahoo Finance has the closing data.
-    - cron: '0 10 * * 1-5'
+    # Jam 16:30 WIB (09:30 UTC) setiap Senin-Jumat.
+    # BEI tutup jam 15:00 WIB, Yahoo Finance siap ~30-60 menit setelahnya.
+    # Buffer 1.5 jam memastikan data closing sudah tersedia.
+    - cron: '30 9 * * 1-5'
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
